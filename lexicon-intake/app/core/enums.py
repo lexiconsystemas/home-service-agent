@@ -1,10 +1,10 @@
-"""System enums."""
+"""Core enums for the intake system."""
 
 from enum import Enum
 
 
 class CallClassification(str, Enum):
-    """Call classification states."""
+    """Call classification types."""
     
     QUALIFIED = "QUALIFIED"
     UNQUALIFIED = "UNQUALIFIED"
@@ -13,12 +13,13 @@ class CallClassification(str, Enum):
 
 
 class DeliveryStatus(str, Enum):
-    """Delivery status states."""
+    """Delivery status types."""
     
     PENDING = "PENDING"
     SENT = "SENT"
     FAILED = "FAILED"
     RETRYING = "RETRYING"
+    FAILED_FINAL = "FAILED_FINAL"
 
 
 class DeliveryChannel(str, Enum):
@@ -48,9 +49,18 @@ class UrgencyLevel(str, Enum):
 
 
 class ServiceType(str, Enum):
-    """Service types."""
+    """Normalized service types."""
     
+    HVAC_REPAIR = "hvac_repair"
+    HVAC_INSTALL = "hvac_install"
     PLUMBING = "plumbing"
-    ELECTRICAL = "electrical"
-    HVAC = "hvac"
-    OTHER = "other"
+    PRESSURE_WASH = "pressure_wash"
+    RESTORATION = "restoration"
+    UNKNOWN = "unknown"
+
+
+class TimeWindow(str, Enum):
+    """Time window classification."""
+    
+    IN_HOURS = "IN_HOURS"
+    AFTER_HOURS = "AFTER_HOURS"

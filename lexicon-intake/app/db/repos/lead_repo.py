@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import CallClassification
+from app.core.enums import ServiceType, CallClassification
 from app.db.tables.lead_record import LeadRecord
 
 
@@ -37,12 +37,21 @@ class LeadRepository:
         caller_name: str | None,
         caller_phone: str,
         service_requested: str | None,
+        service_type_normalized: ServiceType | None,
+        service_normalization_reason_codes: list[str] | None,
         urgency: str,
-        budget: int | None,
+        budget: str | None,
         location_zip: str | None,
         classification: CallClassification,
-        reason_codes: list[str],
+        reason_codes: list[str] | None,
         qualification_outcome: str,
+        routing_profile_name: str | None,
+        time_window: str | None,
+        timezone_used: str | None,
+        computed_local_time: str,
+        chosen_channels: list[str] | None,
+        chosen_destinations: dict | None,
+        routing_reason_codes: list[str] | None,
     ) -> LeadRecord:
         """Create a new lead record."""
         lead_record = LeadRecord(
@@ -52,15 +61,37 @@ class LeadRepository:
             caller_name=caller_name,
             caller_phone=caller_phone,
             service_requested=service_requested,
+            service_type_normalized=service_type_normalized,
+            service_normalization_reason_codes=service_normalization_reason_codes,
             urgency=urgency,
-            budget=str(budget) if budget is not None else None,
+            budget=budget,
             location_zip=location_zip,
             classification=classification,
             reason_codes=reason_codes,
             qualification_outcome=qualification_outcome,
+            routing_profile_name=routing_profile_name,
+            time_window=time_window,
+            timezone_used=timezone_used,
+            computed_local_time=computed_local_time,
+            chosen_channels=chosen_channels,
+            chosen_destinations=chosen_destinations,
+            routing_reason_codes=routing_reason_codes,
         )
         
         self.session.add(lead_record)
+        await self.session.flush()
+        
+        return lead_record
+    
+    async def update_delivery_pending(self, lead_id: str, delivery_pending: bool) -> LeadRecord:
+        """Update delivery pending status."""
+        result = await self.session.execute(
+            select(LeadRecord).where(LeadRecord.lead_id == lead_id)
+        )
+        lead_record = result.scalar_one()
+        
+        lead_record.delivery_pending = "true" if delivery_pending else "false"
+        
         await self.session.flush()
         
         return lead_record
