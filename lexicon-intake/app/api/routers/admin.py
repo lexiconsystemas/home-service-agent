@@ -226,154 +226,355 @@ async def update_message_templates(
     # Get existing client config
     client_config = await client_repo.get_by_client_id(client_id)
     if not client_config:
-        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
+    
+    # Store previous configuration
+    old_config = client_config.message_templates.copy() if client_config.message_templates else {}
     
     # Update message templates
-    templates_dict = {
-        "sms_summary_template": templates.sms_summary_template,
-        "sms_confirmation_template": templates.sms_confirmation_template,
-        "sms_reminder_template": templates.sms_reminder_template,
-        "sms_escalation_template": templates.sms_escalation_template,
-        "email_subject_template": templates.email_subject_template,
-        "email_body_template": templates.email_body_template,
-    }
+    client_config.message_templates = templates.dict()
+    await session.flush()
     
-    # Remove None values to keep existing templates
-    templates_dict = {k: v for k, v in templates_dict.items() if v is not None}
-    
-    # Merge with existing templates
-    existing_templates = client_config.message_templates or {}
-    existing_templates.update(templates_dict)
-    client_config.message_templates = existing_templates
-    
-    await db.commit()
-    
-    logger.info(
-        "Client message templates updated",
-        client_id=client_id,
-        template_count=len(templates_dict),
+    # Log audit event
+    await audit_repo.create_audit_log(
+        actor_type="ADMIN",
+        actor_id="admin",
+        action="CONFIG_UPDATE",
+        target_type="message_templates",
+        target_id=client_id,
+        before_state=old_config,
+        after_state=templates.dict(),
     )
     
     return {
         "client_id": client_id,
-        "message_templates": client_config.message_templates,
+        "message_templates": templates.dict(),
     }
 
 
-@router.put("/clients/{client_id}/routing")
+@router.put("/v1/admin/clients/{client_id}/routing")
 async def update_routing_config(
     client_id: str,
     config: RoutingConfigUpdate,
-    db: AsyncSession = Depends(get_async_session),
-    _: None = Depends(verify_admin_api_key),
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
 ) -> dict[str, Any]:
-    """
-    Update client routing configuration.
-    
-    Args:
-        client_id: Client identifier
-        config: Routing configuration update
-        db: Database session
-        
-    Returns:
-        Updated configuration
-    """
-    client_repo = ClientRepository(db)
+    """Update routing configuration for a client."""
+    client_repo = ClientRepository(session)
+    audit_repo = AuditRepository(session)
+    snapshot_repo = ConfigSnapshotRepository(session)
     routing_service = RoutingService()
     
-    # Get existing client config
+    # Get client configuration
     client_config = await client_repo.get_by_client_id(client_id)
     if not client_config:
-        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
     
     # Validate routing configuration
-    routing_dict = config.dict()
-    is_valid, errors = routing_service.validate_routing_config(routing_dict)
-    
+    is_valid, errors = routing_service.validate_routing_config(config.dict())
     if not is_valid:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid routing configuration: {'; '.join(errors)}"
+            detail={
+                "error": "Invalid routing configuration",
+                "details": errors,
+            },
+        )
+    
+    # Store previous configuration snapshot
+    if client_config.routing_json:
+        current_version = await snapshot_repo.get_max_version(client_id, "routing_config")
+        await snapshot_repo.create_snapshot(
+            client_id=client_id,
+            version=current_version + 1,
+            config_type="routing_config",
+            config_data=client_config.routing_json,
+            created_by="admin",
+            change_reason="Configuration update",
         )
     
     # Update routing configuration
-    client_config.routing_json = routing_dict
+    old_config = client_config.routing_json.copy() if client_config.routing_json else {}
+    client_config.routing_json = config.dict()
+    client_config.version = (client_config.version or 1) + 1
+    client_config.updated_at = datetime.utcnow()
     
-    await db.commit()
+    await session.flush()
+    
+    # Log audit event
+    await audit_repo.create_audit_log(
+        actor_type="ADMIN",
+        actor_id="admin",
+        action="CONFIG_UPDATE",
+        target_type="routing_config",
+        target_id=client_id,
+        before_state=old_config,
+        after_state=config.dict(),
+        details={
+            "version": client_config.version,
+            "config_type": "routing_config",
+        },
+    )
     
     logger.info(
-        "Client routing configuration updated",
+        "Routing configuration updated",
         client_id=client_id,
-        timezone=config.timezone,
-        profile_count=len(config.profiles),
+        version=client_config.version,
+        profiles_count=len(config.profiles),
     )
     
     return {
         "client_id": client_id,
-        "routing_json": client_config.routing_json,
+        "routing_json": config.dict(),
+        "version": client_config.version,
     }
 
 
-@router.get("/clients/{client_id}/routing")
+@router.get("/v1/admin/clients/{client_id}/routing")
 async def get_routing_config(
     client_id: str,
-    db: AsyncSession = Depends(get_async_session),
-    _: None = Depends(verify_admin_api_key),
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
 ) -> dict[str, Any]:
-    """
-    Get client routing configuration.
-    
-    Args:
-        client_id: Client identifier
-        db: Database session
-        
-    Returns:
-        Routing configuration
-    """
-    client_repo = ClientRepository(db)
+    """Get routing configuration for a client."""
+    client_repo = ClientRepository(session)
     
     client_config = await client_repo.get_by_client_id(client_id)
     if not client_config:
-        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
     
     return {
         "client_id": client_id,
         "routing_json": client_config.routing_json,
+        "version": client_config.version,
     }
 
 
-@router.get("/clients/{client_id}")
+@router.post("/v1/admin/clients/{client_id}/rollback/{version}")
+async def rollback_config(
+    client_id: str,
+    version: int,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """Rollback client configuration to a specific version."""
+    client_repo = ClientRepository(session)
+    audit_repo = AuditRepository(session)
+    snapshot_repo = ConfigSnapshotRepository(session)
+    
+    # Get client configuration
+    client_config = await client_repo.get_by_client_id(client_id)
+    if not client_config:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
+    
+    # Get snapshot to rollback to
+    snapshot = await snapshot_repo.get_snapshot_by_version(
+        client_id=client_id,
+        config_type="routing_config",
+        version=version,
+    )
+    
+    if not snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Configuration version {version} not found",
+        )
+    
+    # Store current configuration as new snapshot
+    if client_config.routing_json:
+        current_version = await snapshot_repo.get_max_version(client_id, "routing_config")
+        await snapshot_repo.create_snapshot(
+            client_id=client_id,
+            version=current_version + 1,
+            config_type="routing_config",
+            config_data=client_config.routing_json,
+            created_by="admin",
+            change_reason=f"Rollback to version {version}",
+        )
+    
+    # Rollback configuration
+    old_config = client_config.routing_json.copy() if client_config.routing_json else {}
+    client_config.routing_json = snapshot.config_data
+    client_config.version = (client_config.version or 1) + 1
+    client_config.updated_at = datetime.utcnow()
+    
+    await session.flush()
+    
+    # Log audit event
+    await audit_repo.create_audit_log(
+        actor_type="ADMIN",
+        actor_id="admin",
+        action="CONFIG_ROLLBACK",
+        target_type="routing_config",
+        target_id=client_id,
+        before_state=old_config,
+        after_state=snapshot.config_data,
+        details={
+            "rollback_to_version": version,
+            "new_version": client_config.version,
+            "config_type": "routing_config",
+        },
+    )
+    
+    logger.info(
+        "Configuration rolled back",
+        client_id=client_id,
+        rollback_to_version=version,
+        new_version=client_config.version,
+    )
+    
+    return {
+        "client_id": client_id,
+        "routing_json": snapshot.config_data,
+        "rollback_to_version": version,
+        "current_version": client_config.version,
+    }
+
+
+@router.get("/v1/admin/clients/{client_id}/config-history")
+async def get_config_history(
+    client_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+    config_type: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Get configuration history for a client."""
+    snapshot_repo = ConfigSnapshotRepository(session)
+    
+    snapshots = await snapshot_repo.get_all_snapshots(
+        client_id=client_id,
+        config_type=config_type,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return {
+        "client_id": client_id,
+        "snapshots": [
+            {
+                "id": str(snapshot.id),
+                "version": snapshot.version,
+                "config_type": snapshot.config_type,
+                "created_at": snapshot.created_at.isoformat(),
+                "created_by": snapshot.created_by,
+                "change_reason": snapshot.change_reason,
+            }
+            for snapshot in snapshots
+        ],
+        "count": len(snapshots),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.put("/v1/admin/clients/{client_id}/delivery")
+async def update_delivery_config(
+    client_id: str,
+    config: DeliveryConfigUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """Update delivery configuration for a client."""
+    client_repo = ClientRepository(session)
+    audit_repo = AuditRepository(session)
+    
+    # Get client configuration
+    client_config = await client_repo.get_by_client_id(client_id)
+    if not client_config:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
+    
+    # Store previous configuration
+    old_config = {
+        "delivery_channels": client_config.delivery_channels,
+        "webhook_url": client_config.webhook_url,
+        "sms_to_numbers": client_config.sms_to_numbers,
+        "email_to_addresses": client_config.email_to_addresses,
+    }
+    
+    # Update delivery configuration
+    client_config.delivery_channels = config.delivery_channels
+    client_config.webhook_url = config.webhook_url
+    client_config.sms_to_numbers = config.sms_to_numbers
+    client_config.email_to_addresses = config.email_to_addresses
+    client_config.version = (client_config.version or 1) + 1
+    client_config.updated_at = datetime.utcnow()
+    
+    await session.flush()
+    
+    # Log audit event
+    await audit_repo.create_audit_log(
+        actor_type="ADMIN",
+        actor_id="admin",
+        action="CONFIG_UPDATE",
+        target_type="delivery_config",
+        target_id=client_id,
+        before_state=old_config,
+        after_state=config.dict(),
+        details={
+            "version": client_config.version,
+            "config_type": "delivery_config",
+        },
+    )
+    
+    return {
+        "client_id": client_id,
+        "delivery_config": config.dict(),
+        "version": client_config.version,
+    }
+
+
+@router.get("/v1/admin/clients/{client_id}")
 async def get_client_config(
     client_id: str,
-    db: AsyncSession = Depends(get_async_session),
-    _: None = Depends(verify_admin_api_key),
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
 ) -> dict[str, Any]:
-    """
-    Get complete client configuration.
-    
-    Args:
-        client_id: Client identifier
-        db: Database session
-        
-    Returns:
-        Client configuration
-    """
-    client_repo = ClientRepository(db)
+    """Get complete client configuration."""
+    client_repo = ClientRepository(session)
     
     client_config = await client_repo.get_by_client_id(client_id)
     if not client_config:
-        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Client {client_id} not found",
+        )
     
     return {
-        "client_id": client_config.client_id,
+        "client_id": client_id,
         "to_number": client_config.to_number,
-        "greeting": client_config.greeting,
+        "greeting_message": client_config.greeting_message,
+        "rules_json": client_config.rules_json,
+        "routing_json": client_config.routing_json,
         "delivery_channels": client_config.delivery_channels,
         "webhook_url": client_config.webhook_url,
         "sms_to_numbers": client_config.sms_to_numbers,
         "email_to_addresses": client_config.email_to_addresses,
         "message_templates": client_config.message_templates,
         "followup_flags": client_config.followup_flags,
-        "routing_json": client_config.routing_json,
-        "rules_json": client_config.rules_json,
+        "client_api_key": client_config.client_api_key,
+        "version": client_config.version,
+        "updated_at": client_config.updated_at.isoformat() if client_config.updated_at else None,
     }

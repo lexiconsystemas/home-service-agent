@@ -8,7 +8,7 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import health, calls, admin, metrics, ops, sms
+from app.api.routers import health, calls, admin, metrics, ops, sms, client
 from app.core.logging import setup_logging
 from app.core.errors import lexicon_exception_handler, general_exception_handler, LexiconError
 from app.settings import settings
@@ -105,6 +105,7 @@ app.include_router(calls.router, prefix="/v1/calls", tags=["calls"])
 app.include_router(admin.router, prefix="/v1/admin", tags=["admin"])
 app.include_router(ops.router, tags=["ops"])
 app.include_router(sms.router, tags=["sms"])
+app.include_router(client.router, prefix="/v1", tags=["client"])
 app.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
 
 
