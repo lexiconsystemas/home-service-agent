@@ -59,6 +59,7 @@ class IntakeService:
                 call_id=call_event.call_id,
                 lead_id=lead_id,
                 client_id=client_config.client_id,
+                delivery_channels=client_config.delivery_channels,
             )
             
             # Run qualification
@@ -96,13 +97,20 @@ class IntakeService:
                 reason_codes=classification_result.reason_codes,
             )
             
-            # Enqueue delivery if qualified
+            # Enqueue multi-channel delivery for qualified leads
             if classification_result.classification.value == "QUALIFIED":
-                await self.delivery_service.enqueue_delivery(
+                await self.delivery_service.enqueue_lead_delivery(
                     lead_id=lead_id,
-                    webhook_url=client_config.webhook_url,
+                    client_config=client_config,
                 )
-                logger.info("Delivery enqueued", lead_id=lead_id)
+                logger.info("Lead delivery enqueued", lead_id=lead_id)
+            
+            # Enqueue follow-up automation
+            await self._enqueue_followup_automation(
+                lead_id=lead_id,
+                classification_result=classification_result,
+                client_config=client_config,
+            )
             
             return CallEventResponse(
                 lead_id=lead_id,
@@ -119,3 +127,38 @@ class IntakeService:
                 exc_info=True,
             )
             raise
+    
+    async def _enqueue_followup_automation(
+        self,
+        lead_id: str,
+        classification_result,
+        client_config,
+    ) -> None:
+        """
+        Enqueue follow-up automation based on classification and client config.
+        
+        Args:
+            lead_id: Lead identifier
+            classification_result: Classification result
+            client_config: Client configuration
+        """
+        # Only send follow-up for QUALIFIED and UNQUALIFIED (not SPAM/DROPPED)
+        if classification_result.classification.value in ["QUALIFIED", "UNQUALIFIED"]:
+            # Confirmation message
+            await self.delivery_service.enqueue_followup_confirmation(
+                lead_id=lead_id,
+                client_config=client_config,
+            )
+            
+            # Reminder message (only for qualified)
+            if classification_result.classification.value == "QUALIFIED":
+                await self.delivery_service.enqueue_followup_reminder(
+                    lead_id=lead_id,
+                    client_config=client_config,
+                )
+            
+            # Urgent escalation
+            await self.delivery_service.enqueue_urgent_escalation(
+                lead_id=lead_id,
+                client_config=client_config,
+            )

@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import DeliveryStatus
+from app.core.enums import DeliveryStatus, DeliveryChannel, DeliveryPurpose
 from app.db.tables.delivery_record import DeliveryRecord
 
 
@@ -25,12 +25,16 @@ class DeliveryRepository:
     async def create_delivery_record(
         self,
         lead_id: str,
-        webhook_url: str,
+        channel: DeliveryChannel,
+        purpose: DeliveryPurpose,
+        destination: str,
     ) -> DeliveryRecord:
         """Create a new delivery record."""
         delivery_record = DeliveryRecord(
             lead_id=lead_id,
-            webhook_url=webhook_url,
+            channel=channel,
+            purpose=purpose,
+            destination=destination,
             status=DeliveryStatus.PENDING,
             attempt_count=0,
         )

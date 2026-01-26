@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="change-in-production",
         description="Secret for webhook signatures",
     )
+    admin_api_key: str = Field(
+        default="change-in-production",
+        description="Admin API key for configuration endpoints",
+    )
     
     # Rate Limiting
     rate_limit_requests: int = Field(default=100, description="Rate limit requests per window")
@@ -48,6 +52,30 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = Field(default="INFO", description="Log level")
+    
+    # Twilio SMS
+    twilio_account_sid: str | None = Field(
+        default=None,
+        description="Twilio account SID",
+    )
+    twilio_auth_token: str | None = Field(
+        default=None,
+        description="Twilio auth token",
+    )
+    twilio_from_number: str | None = Field(
+        default=None,
+        description="Twilio from number",
+    )
+    
+    # SendGrid Email
+    sendgrid_api_key: str | None = Field(
+        default=None,
+        description="SendGrid API key",
+    )
+    email_from: str | None = Field(
+        default=None,
+        description="From email address",
+    )
     
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization setup."""
