@@ -28,16 +28,15 @@ class IdempotencyManager:
         async with get_async_session() as session:
             call_repo = CallRepository(session)
             
-            # Check if call_id already exists
-            existing_call = await call_repo.get_by_call_id(call_id)
-            if existing_call:
+            # Use atomic insert to prevent race conditions
+            is_new = await call_repo.create_call_record_atomic(call_id=call_id)
+            
+            if is_new:
+                logger.info("Call_id recorded", call_id=call_id)
+                return True
+            else:
                 logger.info("Duplicate call_id detected", call_id=call_id)
                 return False
-            
-            # Record the call_id
-            await call_repo.create_call_record(call_id=call_id)
-            logger.info("Call_id recorded", call_id=call_id)
-            return True
     
     @staticmethod
     def generate_call_id() -> str:

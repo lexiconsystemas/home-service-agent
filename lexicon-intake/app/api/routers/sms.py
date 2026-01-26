@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Any
+from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from app.core.errors import LexiconError
 from app.db.repos.audit_repo import AuditRepository
 from app.db.repos.lead_repo import LeadRepository
 from app.services.scheduling_service import SchedulingService
+from app.settings import settings
 import structlog
 
 logger = structlog.get_logger()
@@ -20,9 +22,40 @@ router = APIRouter()
 
 async def verify_twilio_signature(request: Request) -> bool:
     """Verify Twilio webhook signature."""
-    # TODO: Implement Twilio signature verification
-    # For now, just return True for development
-    return True
+    try:
+        from twilio.request_validator import RequestValidator
+        
+        # Get the signature from headers
+        signature = request.headers.get("X-Twilio-Signature", "")
+        if not signature:
+            logger.warning("Missing Twilio signature header")
+            return False
+        
+        # Get the URL and request body
+        url = str(request.url)
+        body = await request.body()
+        
+        # Create validator with Twilio auth token
+        validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
+        
+        # Verify the signature
+        is_valid = validator.validate(
+            url,
+            body,
+            signature
+        )
+        
+        if not is_valid:
+            logger.warning("Invalid Twilio signature", signature=signature[:20])
+        
+        return is_valid
+        
+    except ImportError:
+        logger.error("Twilio library not installed - signature verification disabled")
+        return False
+    except Exception as e:
+        logger.error("Error verifying Twilio signature", error=str(e))
+        return False
 
 
 @router.post("/v1/sms/inbound")

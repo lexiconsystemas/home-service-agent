@@ -167,7 +167,7 @@ async def _execute_delivery(delivery_id: str) -> bool:
             status = DeliveryStatus.SENT if success else DeliveryStatus.FAILED
             
             # Check if this is the final failure (max retries exceeded)
-            if not success and delivery_record.attempt_count >= 3:
+            if not success and delivery_record.attempt_count >= delivery_record.max_attempts:
                 status = DeliveryStatus.FAILED_FINAL
                 logger.warning(
                     "Delivery marked as final failure",

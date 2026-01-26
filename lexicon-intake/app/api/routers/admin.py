@@ -98,56 +98,6 @@ async def verify_admin_api_key(x_admin_api_key: str = Header(...)) -> None:
         raise HTTPException(status_code=401, detail="Invalid admin API key")
 
 
-@router.put("/clients/{client_id}/delivery")
-async def update_delivery_config(
-    client_id: str,
-    config: DeliveryConfigUpdate,
-    db: AsyncSession = Depends(get_async_session),
-    _: None = Depends(verify_admin_api_key),
-) -> dict[str, Any]:
-    """
-    Update client delivery configuration.
-    
-    Args:
-        client_id: Client identifier
-        config: Delivery configuration update
-        db: Database session
-        
-    Returns:
-        Updated configuration
-    """
-    client_repo = ClientRepository(db)
-    
-    # Get existing client config
-    client_config = await client_repo.get_by_client_id(client_id)
-    if not client_config:
-        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
-    
-    # Update delivery configuration
-    client_config.delivery_channels = config.delivery_channels
-    client_config.webhook_url = config.webhook_url
-    client_config.sms_to_numbers = config.sms_to_numbers
-    client_config.email_to_addresses = config.email_to_addresses
-    
-    await db.commit()
-    
-    logger.info(
-        "Client delivery configuration updated",
-        client_id=client_id,
-        delivery_channels=config.delivery_channels,
-        sms_count=len(config.sms_to_numbers),
-        email_count=len(config.email_to_addresses),
-    )
-    
-    return {
-        "client_id": client_id,
-        "delivery_channels": client_config.delivery_channels,
-        "webhook_url": client_config.webhook_url,
-        "sms_to_numbers": client_config.sms_to_numbers,
-        "email_to_addresses": client_config.email_to_addresses,
-    }
-
-
 @router.put("/clients/{client_id}/followup")
 async def update_followup_config(
     client_id: str,

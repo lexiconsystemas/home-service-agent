@@ -36,10 +36,10 @@ app.add_exception_handler(LexiconError, lexicon_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
 # CORS middleware - disabled by default for security
-if settings.CORS_ENABLED:
+if settings.cors_enabled:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS or ["*"],
+        allow_origins=settings.cors_origins or ["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

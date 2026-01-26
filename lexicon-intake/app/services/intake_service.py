@@ -146,12 +146,12 @@ class IntakeService:
                 "chosen_destinations": {
                     "webhook_url": routing_config.get("webhook_url"),
                     "sms_to_numbers": routing_config.get("sms_to_numbers", []),
-                    "email_to_addresses": routing_config.get("email_to_addresses", []),
+                    "email_to_addresses": routing_config.get("email_addresses", []),
                 } if routing_config else None,
                 "reason_codes": routing_reason_codes,
             }
             
-            # Create lead record with routing decision
+            # Create lead record with routing decision inside transaction
             lead_record = await self.lead_repo.create_lead(
                 lead_id=lead_id,
                 call_id=call_event.call_id,
@@ -187,7 +187,11 @@ class IntakeService:
                 reason_codes=all_reason_codes,
             )
             
-            # Enqueue delivery using routing configuration
+            # Commit transaction before enqueuing tasks
+            await self.db.commit()
+            
+            # Enqueue tasks AFTER commit
+            delivery_success = True
             if classification_result.classification.value == "QUALIFIED":
                 delivery_success = await self._enqueue_delivery_with_routing(
                     lead_id=lead_id,
@@ -229,6 +233,8 @@ class IntakeService:
             return CallEventResponse(**response_data)
             
         except Exception as e:
+            # Rollback on any error
+            await self.db.rollback()
             logger.error(
                 "Failed to process inbound call",
                 call_id=call_event.call_id,
