@@ -61,6 +61,8 @@ class DeliveryRepository:
         error_message: str | None = None,
         failed_final: bool | None = None,
         failure_reason: str | None = None,
+        response_status_code: int | None = None,
+        last_attempt_at: Any = None,
     ) -> DeliveryRecord | None:
         """Update delivery record status and metadata."""
         query = select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
@@ -85,9 +87,40 @@ class DeliveryRepository:
             if failure_reason is not None:
                 delivery.failure_reason = failure_reason
             
+            if response_status_code is not None:
+                delivery.response_status_code = response_status_code
+            
+            if last_attempt_at is not None:
+                delivery.last_attempt_at = last_attempt_at
+            
             await self.session.flush()
         
         return delivery
+    
+    async def update_delivery_attempt(
+        self,
+        delivery_id: str,
+        status: DeliveryStatus,
+        attempt_count: int | None = None,
+        response_data: dict[str, Any] | None = None,
+        error_message: str | None = None,
+        failed_final: bool | None = None,
+        failure_reason: str | None = None,
+        response_status_code: int | None = None,
+        last_attempt_at: Any = None,
+    ) -> DeliveryRecord | None:
+        """Alias for update_delivery_status to maintain compatibility."""
+        return await self.update_delivery_status(
+            delivery_id=delivery_id,
+            status=status,
+            attempt_count=attempt_count,
+            response_data=response_data,
+            error_message=error_message,
+            failed_final=failed_final,
+            failure_reason=failure_reason,
+            response_status_code=response_status_code,
+            last_attempt_at=last_attempt_at,
+        )
     
     async def get_failed_final_deliveries(
         self,

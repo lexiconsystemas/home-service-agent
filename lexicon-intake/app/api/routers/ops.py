@@ -13,6 +13,7 @@ from app.db.repos.delivery_repo import DeliveryRepository
 from app.db.repos.lead_repo import LeadRepository
 from app.db.tables.delivery_record import DeliveryRecord, DeliveryStatus
 from app.services.delivery_service import DeliveryService
+from app.settings import settings
 from app.workers.tasks import enqueue_delivery_task
 import structlog
 
@@ -24,7 +25,7 @@ router = APIRouter()
 async def verify_admin_api_key(request: Request) -> str:
     """Verify admin API key from header."""
     api_key = request.headers.get("X-Admin-API-Key")
-    if not api_key or api_key != "valid-key":  # TODO: Use settings.ADMIN_API_KEY
+    if not api_key or api_key != settings.ADMIN_API_KEY:
         raise HTTPException(
             status_code=401,
             detail="Invalid admin API key",
