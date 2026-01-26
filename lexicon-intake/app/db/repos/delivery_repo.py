@@ -2,68 +2,117 @@
 
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc, and_
 
-from app.core.enums import DeliveryStatus, DeliveryChannel, DeliveryPurpose
-from app.db.tables.delivery_record import DeliveryRecord
+from app.db.tables.delivery_record import DeliveryRecord, DeliveryStatus
 
 
 class DeliveryRepository:
-    """Repository for delivery records."""
+    """Repository for delivery record operations."""
     
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
     
-    async def get_by_lead_id(self, lead_id: str) -> list[DeliveryRecord]:
-        """Get delivery records by lead_id."""
-        result = await self.session.execute(
-            select(DeliveryRecord).where(DeliveryRecord.lead_id == lead_id)
-        )
-        return result.scalars().all()
-    
     async def create_delivery_record(
         self,
         lead_id: str,
-        channel: DeliveryChannel,
-        purpose: DeliveryPurpose,
+        channel: Any,
+        purpose: Any,
         destination: str,
+        payload: dict[str, Any],
+        max_attempts: int = 5,
     ) -> DeliveryRecord:
         """Create a new delivery record."""
-        delivery_record = DeliveryRecord(
+        delivery = DeliveryRecord(
             lead_id=lead_id,
             channel=channel,
             purpose=purpose,
             destination=destination,
-            status=DeliveryStatus.PENDING,
-            attempt_count=0,
+            payload=payload,
+            max_attempts=max_attempts,
         )
         
-        self.session.add(delivery_record)
+        self.session.add(delivery)
         await self.session.flush()
-        
-        return delivery_record
+        return delivery
     
-    async def update_delivery_attempt(
+    async def get_by_id(self, delivery_id: str) -> DeliveryRecord | None:
+        """Get delivery record by ID."""
+        query = select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+    
+    async def get_by_lead_id(self, lead_id: str) -> list[DeliveryRecord]:
+        """Get all delivery records for a lead."""
+        query = select(DeliveryRecord).where(
+            DeliveryRecord.lead_id == lead_id
+        ).order_by(desc(DeliveryRecord.created_at))
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
+    async def update_delivery_status(
         self,
         delivery_id: str,
         status: DeliveryStatus,
-        response_status_code: int | None = None,
-        response_body: str | None = None,
+        attempt_count: int | None = None,
+        response_data: dict[str, Any] | None = None,
         error_message: str | None = None,
-    ) -> DeliveryRecord:
-        """Update delivery record with attempt details."""
-        result = await self.session.execute(
-            select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
-        )
-        delivery_record = result.scalar_one()
+        failed_final: bool | None = None,
+        failure_reason: str | None = None,
+    ) -> DeliveryRecord | None:
+        """Update delivery record status and metadata."""
+        query = select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
+        result = await self.session.execute(query)
+        delivery = result.scalar_one_or_none()
         
-        delivery_record.status = status
-        delivery_record.attempt_count += 1
-        delivery_record.response_status_code = response_status_code
-        delivery_record.response_body = response_body
-        delivery_record.error_message = error_message
+        if delivery:
+            delivery.status = status
+            
+            if attempt_count is not None:
+                delivery.attempt_count = attempt_count
+            
+            if response_data is not None:
+                delivery.response_data = response_data
+            
+            if error_message is not None:
+                delivery.error_message = error_message
+            
+            if failed_final is not None:
+                delivery.failed_final = failed_final
+            
+            if failure_reason is not None:
+                delivery.failure_reason = failure_reason
+            
+            await self.session.flush()
         
-        await self.session.flush()
+        return delivery
+    
+    async def get_failed_final_deliveries(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[DeliveryRecord]:
+        """Get deliveries that have failed permanently."""
+        query = select(DeliveryRecord).where(
+            and_(
+                DeliveryRecord.failed_final == True,
+                DeliveryRecord.status == DeliveryStatus.FAILED_FINAL
+            )
+        ).order_by(desc(DeliveryRecord.last_attempt_at)).limit(limit).offset(offset)
         
-        return delivery_record
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
+    async def get_pending_deliveries(self, limit: int = 100) -> list[DeliveryRecord]:
+        """Get pending deliveries for processing."""
+        query = select(DeliveryRecord).where(
+            and_(
+                DeliveryRecord.status == DeliveryStatus.PENDING,
+                DeliveryRecord.failed_final == False
+            )
+        ).order_by(DeliveryRecord.created_at).limit(limit)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())

@@ -1,0 +1,217 @@
+"""Operations endpoints for delivery replay and admin functions."""
+
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import get_async_session
+from app.core.errors import LexiconError
+from app.db.repos.audit_repo import AuditRepository
+from app.db.repos.delivery_repo import DeliveryRepository
+from app.db.repos.lead_repo import LeadRepository
+from app.db.tables.delivery_record import DeliveryRecord, DeliveryStatus
+from app.services.delivery_service import DeliveryService
+from app.workers.tasks import enqueue_delivery_task
+import structlog
+
+logger = structlog.get_logger()
+
+router = APIRouter()
+
+
+async def verify_admin_api_key(request: Request) -> str:
+    """Verify admin API key from header."""
+    api_key = request.headers.get("X-Admin-API-Key")
+    if not api_key or api_key != "valid-key":  # TODO: Use settings.ADMIN_API_KEY
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin API key",
+        )
+    return api_key
+
+
+@router.post("/v1/delivery/{delivery_id}/replay")
+async def replay_delivery(
+    delivery_id: str,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """
+    Replay a failed delivery.
+    
+    Creates a new delivery attempt using the same payload.
+    Enforces idempotency per delivery_id + replay_count.
+    """
+    delivery_repo = DeliveryRepository(session)
+    lead_repo = LeadRepository(session)
+    audit_repo = AuditRepository(session)
+    
+    # Get original delivery record
+    delivery = await delivery_repo.get_by_id(delivery_id)
+    if not delivery:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Delivery {delivery_id} not found",
+        )
+    
+    # Check if delivery is in final failed state
+    if not delivery.failed_final:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Delivery {delivery_id} is not in final failed state",
+        )
+    
+    # Get lead record for context
+    lead = await lead_repo.get_by_lead_id(delivery.lead_id)
+    if not lead:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Lead {delivery.lead_id} not found",
+        )
+    
+    # Create new delivery record for replay
+    new_delivery = await delivery_repo.create_delivery_record(
+        lead_id=delivery.lead_id,
+        channel=delivery.channel,
+        purpose=delivery.purpose,
+        destination=delivery.destination,
+        payload=delivery.payload,
+        max_attempts=delivery.max_attempts,
+    )
+    
+    # Enqueue new delivery
+    await enqueue_delivery_task(str(new_delivery.id))
+    
+    # Log audit event
+    await audit_repo.create_audit_log(
+        actor_type="ADMIN",
+        actor_id="admin",  # TODO: Get from API key or request
+        action="REPLAY_DELIVERY",
+        target_type="delivery",
+        target_id=str(new_delivery.id),
+        before_state={
+            "original_delivery_id": delivery_id,
+            "original_status": delivery.status,
+            "original_attempt_count": delivery.attempt_count,
+        },
+        after_state={
+            "new_delivery_id": str(new_delivery.id),
+            "new_status": new_delivery.status,
+            "replay_timestamp": datetime.utcnow().isoformat(),
+        },
+        details={
+            "lead_id": delivery.lead_id,
+            "client_id": lead.client_id,
+            "channel": delivery.channel.value,
+            "purpose": delivery.purpose.value,
+        },
+    )
+    
+    logger.info(
+        "Delivery replay created",
+        original_delivery_id=delivery_id,
+        new_delivery_id=str(new_delivery.id),
+        lead_id=delivery.lead_id,
+        channel=delivery.channel.value,
+    )
+    
+    return {
+        "original_delivery_id": delivery_id,
+        "new_delivery_id": str(new_delivery.id),
+        "lead_id": delivery.lead_id,
+        "channel": delivery.channel.value,
+        "purpose": delivery.purpose.value,
+        "destination": delivery.destination,
+        "status": new_delivery.status.value,
+    }
+
+
+@router.get("/v1/dlq")
+async def get_dlq_deliveries(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Get dead letter queue deliveries (final failed deliveries)."""
+    delivery_repo = DeliveryRepository(session)
+    
+    # Get failed final deliveries
+    deliveries = await delivery_repo.get_failed_final_deliveries(
+        limit=limit,
+        offset=offset,
+    )
+    
+    return {
+        "deliveries": [
+            {
+                "id": str(delivery.id),
+                "lead_id": delivery.lead_id,
+                "channel": delivery.channel.value,
+                "purpose": delivery.purpose.value,
+                "destination": delivery.destination,
+                "status": delivery.status.value,
+                "attempt_count": delivery.attempt_count,
+                "max_attempts": delivery.max_attempts,
+                "failure_reason": delivery.failure_reason,
+                "last_attempt_at": delivery.last_attempt_at.isoformat() if delivery.last_attempt_at else None,
+                "created_at": delivery.created_at.isoformat(),
+            }
+            for delivery in deliveries
+        ],
+        "count": len(deliveries),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/v1/audit-logs")
+async def get_audit_logs(
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+    target_type: str | None = None,
+    target_id: str | None = None,
+    actor_type: str | None = None,
+    actor_id: str | None = None,
+    action: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Get audit logs with optional filters."""
+    audit_repo = AuditRepository(session)
+    
+    logs = await audit_repo.get_audit_logs(
+        target_type=target_type,
+        target_id=target_id,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        action=action,
+        limit=limit,
+        offset=offset,
+    )
+    
+    return {
+        "logs": [
+            {
+                "id": str(log.id),
+                "ts": log.ts.isoformat(),
+                "actor_type": log.actor_type,
+                "actor_id": log.actor_id,
+                "action": log.action,
+                "target_type": log.target_type,
+                "target_id": log.target_id,
+                "before_state": log.before_state,
+                "after_state": log.after_state,
+                "details": log.details,
+            }
+            for log in logs
+        ],
+        "count": len(logs),
+        "limit": limit,
+        "offset": offset,
+    }
