@@ -1,0 +1,52 @@
+{
+  "name": "Restoration Services Template",
+  "description": "Template for water damage, fire damage, and restoration businesses",
+  "rules_json": {
+    "qualification": {
+      "budget_threshold": 500,
+      "urgency_allowed": ["high", "same_day"],
+      "location_required": true,
+      "service_required": true
+    },
+    "classification": {
+      "qualified_keywords": ["water", "fire", "mold", "damage", "emergency", "flood"],
+      "unqualified_keywords": ["question", "information", "consultation"],
+      "spam_keywords": ["test", "spam"]
+    }
+  },
+  "routing_json": {
+    "timezone": "America/New_York",
+    "business_hours": [
+      {
+        "mon": [{"start": "00:00", "end": "23:59"}],
+        "tue": [{"start": "00:00", "end": "23:59"}],
+        "wed": [{"start": "00:00", "end": "23:59"}],
+        "thu": [{"start": "00:00", "end": "23:59"}],
+        "fri": [{"start": "00:00", "end": "23:59"}],
+        "sat": [{"start": "00:00", "end": "23:59"}],
+        "sun": [{"start": "00:00", "end": "23:59"}]
+      }
+    ],
+    "profiles": [
+      {
+        "name": "restoration_emergency",
+        "match": {
+          "service_type_in": ["restoration"]
+        },
+        "delivery": {
+          "channels": ["WEBHOOK", "SMS"],
+          "webhook_url": "https://restoration.example.com/emergency",
+          "sms_to_numbers": ["+15550000001", "+15550000002"]
+        },
+        "escalation": {
+          "urgent_escalation": true
+        }
+      }
+    ]
+  },
+  "delivery_defaults": {
+    "delivery_channels": ["WEBHOOK", "SMS"],
+    "webhook_url": "https://restoration.example.com/emergency",
+    "sms_to_numbers": ["+15550000001"]
+  }
+}

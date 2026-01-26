@@ -1,0 +1,151 @@
+{
+  "name": "HVAC Services Template",
+  "description": "Template for HVAC repair and installation businesses",
+  "rules_json": {
+    "qualification": {
+      "budget_threshold": 100,
+      "urgency_allowed": ["low", "medium", "high", "same_day"],
+      "location_required": true,
+      "service_required": true
+    },
+    "classification": {
+      "qualified_keywords": ["repair", "install", "replace", "fix", "broken"],
+      "unqualified_keywords": ["question", "information", "price only", "shopping"],
+      "spam_keywords": ["test", "spam", "fake"]
+    }
+  },
+  "routing_json": {
+    "timezone": "America/New_York",
+    "business_hours": {
+      "mon": [{"start": "08:00", "end": "18:00"}],
+      "tue": [{"start": "08:00", "end": "18:00"}],
+      "wed": [{"start": "08:00", "end": "18:00"}],
+      "thu": [{"start": "08:00", "end": "18:00"}],
+      "fri": [{"start": "08:00", "end": "18:00"}],
+      "sat": [{"start": "10:00", "end": "14:00"}],
+      "sun": []
+    },
+    "profiles": [
+      {
+        "name": "hvac_urgent_in_hours",
+        "match": {
+          "service_type_in": ["hvac_repair", "hvac_install"],
+          "time_window": "IN_HOURS"
+        },
+        "delivery": {
+          "channels": ["WEBHOOK", "SMS"],
+          "sms_to_numbers": ["+15550000001"],
+          "webhook_url": "https://hvac.example.com/webhook"
+        },
+        "followup": {
+          "send_confirmation_to_caller": true,
+          "send_reminder_to_caller": false
+        },
+        "escalation": {
+          "urgent_escalation": true
+        },
+        "scheduling": {
+          "enabled": true,
+          "windows": [
+            {"label": "Today 2-4pm", "start_offset_min": 0, "end_offset_min": 120},
+            {"label": "Today 4-6pm", "start_offset_min": 120, "end_offset_min": 240},
+            {"label": "Tomorrow Morning", "start_offset_min": 1440, "end_offset_min": 1800}
+          ]
+        }
+      },
+      {
+        "name": "hvac_urgent_after_hours",
+        "match": {
+          "service_type_in": ["hvac_repair", "hvac_install"],
+          "time_window": "AFTER_HOURS"
+        },
+        "delivery": {
+          "channels": ["SMS"],
+          "sms_to_numbers": ["+15550000002"]
+        },
+        "followup": {
+          "send_confirmation_to_caller": true,
+          "send_reminder_to_caller": true,
+          "reminder_delay_minutes": 30
+        },
+        "escalation": {
+          "urgent_escalation": true,
+          "urgent_override_channels": ["SMS"],
+          "urgent_override_recipients": ["+15550009999"]
+        },
+        "scheduling": {
+          "enabled": true,
+          "windows": [
+            {"label": "Tomorrow Morning", "start_offset_min": 1440, "end_offset_min": 1800},
+            {"label": "Tomorrow Afternoon", "start_offset_min": 1800, "end_offset_min": 2160}
+          ]
+        }
+      },
+      {
+        "name": "hvac_standard_in_hours",
+        "match": {
+          "time_window": "IN_HOURS"
+        },
+        "delivery": {
+          "channels": ["WEBHOOK"],
+          "webhook_url": "https://hvac.example.com/webhook"
+        },
+        "followup": {
+          "send_confirmation_to_caller": false
+        },
+        "escalation": {
+          "urgent_escalation": false
+        },
+        "scheduling": {
+          "enabled": false
+        }
+      },
+      {
+        "name": "hvac_standard_after_hours",
+        "match": {
+          "time_window": "AFTER_HOURS"
+        },
+        "delivery": {
+          "channels": ["SMS"],
+          "sms_to_numbers": ["+15550000003"]
+        },
+        "followup": {
+          "send_confirmation_to_caller": true
+        },
+        "escalation": {
+          "urgent_escalation": false
+        },
+        "scheduling": {
+          "enabled": true,
+          "windows": [
+            {"label": "Tomorrow Morning", "start_offset_min": 1440, "end_offset_min": 1800}
+          ]
+        }
+      }
+    ]
+  },
+  "delivery_defaults": {
+    "delivery_channels": ["WEBHOOK"],
+    "webhook_url": "https://hvac.example.com/webhook",
+    "sms_to_numbers": [],
+    "email_to_addresses": []
+  },
+  "message_templates": {
+    "confirmation": {
+      "sms": "Thank you for contacting us! We've received your HVAC service request and will be in touch shortly.",
+      "email": "Thank you for your HVAC service request. Our team will review your information and contact you shortly."
+    },
+    "reminder": {
+      "sms": "Reminder: We're looking forward to helping with your HVAC service. Please let us know if you have any questions.",
+      "email": "Reminder about your HVAC service request. Our team is ready to assist you."
+    },
+    "scheduling": {
+      "sms": "We can help. Reply with your preferred time:\n1. Today 2-4pm\n2. Today 4-6pm\n3. Tomorrow Morning"
+    }
+  },
+  "followup_flags": {
+    "send_confirmation_to_caller": true,
+    "send_reminder_to_caller": false,
+    "reminder_delay_minutes": 60
+  }
+}

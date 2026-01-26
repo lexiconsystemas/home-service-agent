@@ -1,0 +1,55 @@
+{
+  "name": "Pressure Washing Template",
+  "description": "Template for pressure washing businesses",
+  "rules_json": {
+    "qualification": {
+      "budget_threshold": 25,
+      "urgency_allowed": ["low", "medium", "high"],
+      "location_required": true,
+      "service_required": true
+    },
+    "classification": {
+      "qualified_keywords": ["wash", "clean", "driveway", "house", "exterior"],
+      "unqualified_keywords": ["question", "information"],
+      "spam_keywords": ["test", "spam"]
+    }
+  },
+  "routing_json": {
+    "timezone": "America/New_York",
+    "business_hours": {
+      "mon": [{"start": "08:00", "end": "17:00"}],
+      "tue": [{"start": "08:00", "end": "17:00"}],
+      "wed": [{"start": "08:00", "end": "17:00"}],
+      "thu": [{"start": "08:00", "end": "17:00"}],
+      "fri": [{"start": "08:00", "end": "17:00"}],
+      "sat": [{"start": "09:00", "end": "15:00"}],
+      "sun": []
+    },
+    "profiles": [
+      {
+        "name": "pressure_wash_standard",
+        "match": {
+          "time_window": "IN_HOURS"
+        },
+        "delivery": {
+          "channels": ["WEBHOOK"],
+          "webhook_url": "https://pressurewash.example.com/webhook"
+        }
+      },
+      {
+        "name": "pressure_wash_after_hours",
+        "match": {
+          "time_window": "AFTER_HOURS"
+        },
+        "delivery": {
+          "channels": ["EMAIL"],
+          "email_to_addresses": ["leads@pressurewash.example.com"]
+        }
+      }
+    ]
+  },
+  "delivery_defaults": {
+    "delivery_channels": ["WEBHOOK"],
+    "webhook_url": "https://pressurewash.example.com/webhook"
+  }
+}

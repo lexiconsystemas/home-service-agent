@@ -1,0 +1,61 @@
+{
+  "name": "Plumbing Services Template",
+  "description": "Template for plumbing businesses",
+  "rules_json": {
+    "qualification": {
+      "budget_threshold": 50,
+      "urgency_allowed": ["low", "medium", "high", "same_day"],
+      "location_required": true,
+      "service_required": true
+    },
+    "classification": {
+      "qualified_keywords": ["repair", "fix", "leak", "clog", "broken"],
+      "unqualified_keywords": ["question", "information", "price only"],
+      "spam_keywords": ["test", "spam"]
+    }
+  },
+  "routing_json": {
+    "timezone": "America/New_York",
+    "business_hours": {
+      "mon": [{"start": "07:00", "end": "19:00"}],
+      "tue": [{"start": "07:00", "end": "19:00"}],
+      "wed": [{"start": "07:00", "end": "19:00"}],
+      "thu": [{"start": "07:00", "end": "19:00"}],
+      "fri": [{"start": "07:00", "end": "19:00"}],
+      "sat": [{"start": "08:00", "end": "16:00"}],
+      "sun": []
+    },
+    "profiles": [
+      {
+        "name": "plumbing_emergency",
+        "match": {
+          "service_type_in": ["plumbing"],
+          "time_window": "AFTER_HOURS"
+        },
+        "delivery": {
+          "channels": ["SMS"],
+          "sms_to_numbers": ["+15550000001"]
+        },
+        "escalation": {
+          "urgent_escalation": true
+        }
+      },
+      {
+        "name": "plumbing_standard",
+        "match": {
+          "time_window": "IN_HOURS"
+        },
+        "delivery": {
+          "channels": ["WEBHOOK", "SMS"],
+          "webhook_url": "https://plumbing.example.com/webhook",
+          "sms_to_numbers": ["+15550000002"]
+        }
+      }
+    ]
+  },
+  "delivery_defaults": {
+    "delivery_channels": ["WEBHOOK", "SMS"],
+    "webhook_url": "https://plumbing.example.com/webhook",
+    "sms_to_numbers": ["+15550000002"]
+  }
+}
