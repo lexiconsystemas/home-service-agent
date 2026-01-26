@@ -2,18 +2,12 @@
 
 from typing import Any
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings."""
-    
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-    )
     
     # Database
     database_url: str = Field(
@@ -35,11 +29,11 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = Field(
         default="change-in-production",
-        description="Secret key for signing",
+        description="Application secret key",
     )
     webhook_signing_secret: str = Field(
         default="change-in-production",
-        description="Secret for webhook signatures",
+        description="Webhook signature secret",
     )
     admin_api_key: str = Field(
         default="change-in-production",
@@ -52,6 +46,10 @@ class Settings(BaseSettings):
     
     # Logging
     log_level: str = Field(default="INFO", description="Log level")
+    
+    # CORS (disabled by default for security)
+    cors_enabled: bool = Field(default=False, description="Enable CORS middleware")
+    cors_origins: list[str] | None = Field(default=None, description="CORS allowed origins")
     
     # Twilio SMS
     twilio_account_sid: str | None = Field(
@@ -77,10 +75,17 @@ class Settings(BaseSettings):
         description="From email address",
     )
     
-    def model_post_init(self, __context: Any) -> None:
-        """Post-initialization setup."""
-        # Convert log level to uppercase for consistency
-        self.log_level = self.log_level.upper()
+    @validator("cors_origins", pre=True)
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from string or list."""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = False
 
 
 settings = Settings()

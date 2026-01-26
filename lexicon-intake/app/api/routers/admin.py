@@ -11,6 +11,7 @@ import structlog
 from app.core.security import sanitize_phone_number
 from app.db.session import get_async_session
 from app.db.repos.client_repo import ClientRepository
+from app.services.routing_service import RoutingService
 from app.settings import settings
 
 logger = structlog.get_logger()
@@ -71,6 +72,21 @@ class MessageTemplatesUpdate(BaseModel):
     sms_escalation_template: str | None = None
     email_subject_template: str | None = None
     email_body_template: str | None = None
+
+
+class RoutingConfigUpdate(BaseModel):
+    """Model for updating routing configuration."""
+    
+    timezone: str
+    business_hours: dict[str, Any]
+    profiles: list[dict[str, Any]]
+    
+    @validator("profiles")
+    def validate_profiles(cls, v):
+        """Validate routing profiles."""
+        if not v:
+            raise ValueError("At least one routing profile is required")
+        return v
 
 
 async def verify_admin_api_key(x_admin_api_key: str = Header(...)) -> None:
@@ -244,6 +260,88 @@ async def update_message_templates(
     }
 
 
+@router.put("/clients/{client_id}/routing")
+async def update_routing_config(
+    client_id: str,
+    config: RoutingConfigUpdate,
+    db: AsyncSession = Depends(get_async_session),
+    _: None = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """
+    Update client routing configuration.
+    
+    Args:
+        client_id: Client identifier
+        config: Routing configuration update
+        db: Database session
+        
+    Returns:
+        Updated configuration
+    """
+    client_repo = ClientRepository(db)
+    routing_service = RoutingService()
+    
+    # Get existing client config
+    client_config = await client_repo.get_by_client_id(client_id)
+    if not client_config:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+    
+    # Validate routing configuration
+    routing_dict = config.dict()
+    is_valid, errors = routing_service.validate_routing_config(routing_dict)
+    
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid routing configuration: {'; '.join(errors)}"
+        )
+    
+    # Update routing configuration
+    client_config.routing_json = routing_dict
+    
+    await db.commit()
+    
+    logger.info(
+        "Client routing configuration updated",
+        client_id=client_id,
+        timezone=config.timezone,
+        profile_count=len(config.profiles),
+    )
+    
+    return {
+        "client_id": client_id,
+        "routing_json": client_config.routing_json,
+    }
+
+
+@router.get("/clients/{client_id}/routing")
+async def get_routing_config(
+    client_id: str,
+    db: AsyncSession = Depends(get_async_session),
+    _: None = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """
+    Get client routing configuration.
+    
+    Args:
+        client_id: Client identifier
+        db: Database session
+        
+    Returns:
+        Routing configuration
+    """
+    client_repo = ClientRepository(db)
+    
+    client_config = await client_repo.get_by_client_id(client_id)
+    if not client_config:
+        raise HTTPException(status_code=404, detail=f"Client {client_id} not found")
+    
+    return {
+        "client_id": client_id,
+        "routing_json": client_config.routing_json,
+    }
+
+
 @router.get("/clients/{client_id}")
 async def get_client_config(
     client_id: str,
@@ -276,5 +374,6 @@ async def get_client_config(
         "email_to_addresses": client_config.email_to_addresses,
         "message_templates": client_config.message_templates,
         "followup_flags": client_config.followup_flags,
+        "routing_json": client_config.routing_json,
         "rules_json": client_config.rules_json,
     }

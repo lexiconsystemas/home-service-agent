@@ -8,7 +8,7 @@ import structlog
 from app.adapters.messaging.twilio_sms import TwilioSMSAdapter
 from app.adapters.messaging.sendgrid_email import SendGridEmailAdapter
 from app.adapters.webhooks.webhook_sender import WebhookSender
-from app.core.enums import DeliveryChannel, DeliveryPurpose
+from app.core.enums import DeliveryChannel, DeliveryPurpose, DeliveryStatus
 from app.core.time import utc_now, format_timestamp
 from app.db.repos.delivery_repo import DeliveryRepository
 from app.db.repos.lead_repo import LeadRepository
@@ -100,7 +100,7 @@ def deliver_followup_task(delivery_id: str) -> bool:
 
 async def _execute_delivery(delivery_id: str) -> bool:
     """
-    Execute delivery based on channel and purpose.
+    Execute delivery based on stored routing decision.
     
     Args:
         delivery_id: Delivery record ID
@@ -126,16 +126,20 @@ async def _execute_delivery(delivery_id: str) -> bool:
             logger.error("Delivery record not found", delivery_id=delivery_id)
             return False
         
-        # Get lead and client records
+        # Get lead record to access stored routing decision
         lead_record = await lead_repo.get_by_lead_id(delivery_record.lead_id)
         if not lead_record:
             logger.error("Lead record not found", lead_id=delivery_record.lead_id)
             return False
         
+        # Get client configuration
         client_config = await client_repo.get_by_client_id(lead_record.client_id)
         if not client_config:
             logger.error("Client config not found", client_id=lead_record.client_id)
             return False
+        
+        # Use stored routing decision instead of recomputing
+        routing_config = _extract_stored_routing(lead_record, client_config)
         
         # Execute delivery based on channel
         success = False
@@ -145,23 +149,31 @@ async def _execute_delivery(delivery_id: str) -> bool:
         try:
             if delivery_record.channel == DeliveryChannel.WEBHOOK:
                 success, error_message, status_code = await _deliver_webhook(
-                    delivery_record, lead_record, client_config
+                    delivery_record, lead_record, routing_config
                 )
             elif delivery_record.channel == DeliveryChannel.SMS:
                 success, error_message, status_code = await _deliver_sms(
-                    delivery_record, lead_record, client_config
+                    delivery_record, lead_record, routing_config
                 )
             elif delivery_record.channel == DeliveryChannel.EMAIL:
                 success, error_message, status_code = await _deliver_email(
-                    delivery_record, lead_record, client_config
+                    delivery_record, lead_record, routing_config
                 )
             else:
                 error_message = f"Unsupported channel: {delivery_record.channel}"
                 logger.error("Unsupported delivery channel", channel=delivery_record.channel)
             
             # Update delivery record
-            from app.core.enums import DeliveryStatus
             status = DeliveryStatus.SENT if success else DeliveryStatus.FAILED
+            
+            # Check if this is the final failure (max retries exceeded)
+            if not success and delivery_record.attempt_count >= 3:
+                status = DeliveryStatus.FAILED_FINAL
+                logger.warning(
+                    "Delivery marked as final failure",
+                    delivery_id=delivery_id,
+                    attempts=delivery_record.attempt_count,
+                )
             
             await delivery_repo.update_delivery_attempt(
                 delivery_id=str(delivery_record.id),
@@ -182,7 +194,6 @@ async def _execute_delivery(delivery_id: str) -> bool:
             )
             
             # Update delivery record with error
-            from app.core.enums import DeliveryStatus
             await delivery_repo.update_delivery_attempt(
                 delivery_id=str(delivery_record.id),
                 status=DeliveryStatus.FAILED,
@@ -192,24 +203,56 @@ async def _execute_delivery(delivery_id: str) -> bool:
             return False
 
 
-async def _deliver_webhook(delivery_record, lead_record, client_config) -> tuple[bool, str | None, int | None]:
+def _extract_stored_routing(lead_record, client_config) -> dict:
+    """
+    Extract routing configuration from stored lead record.
+    
+    Args:
+        lead_record: Lead record with stored routing decision
+        client_config: Client configuration for fallback
+        
+    Returns:
+        Routing configuration dictionary
+    """
+    if lead_record.chosen_destinations:
+        # Use stored routing decision
+        return {
+            "webhook_url": lead_record.chosen_destinations.get("webhook_url"),
+            "sms_to_numbers": lead_record.chosen_destinations.get("sms_to_numbers", []),
+            "email_to_addresses": lead_record.chosen_destinations.get("email_to_addresses", []),
+        }
+    else:
+        # Fallback to base client configuration
+        return {
+            "webhook_url": client_config.webhook_url,
+            "sms_to_numbers": client_config.sms_to_numbers or [],
+            "email_to_addresses": client_config.email_to_addresses or [],
+        }
+
+
+async def _deliver_webhook(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver webhook payload."""
     webhook_sender = WebhookSender()
     
     try:
-        # Use existing webhook sender logic
-        success = await webhook_sender.send_webhook(str(delivery_record.id))
+        # Use routing config webhook URL or fallback
+        webhook_url = routing_config.get("webhook_url")
+        if not webhook_url:
+            return False, "No webhook URL configured", None
+        
+        # Use existing webhook sender logic with the correct URL
+        success = await webhook_sender.send_webhook(str(delivery_record.id), webhook_url)
         return success, None, 200 if success else None
     finally:
         await webhook_sender.close()
 
 
-async def _deliver_sms(delivery_record, lead_record, client_config) -> tuple[bool, str | None, int | None]:
+async def _deliver_sms(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver SMS message."""
     sms_adapter = TwilioSMSAdapter()
     
     try:
-        message = _generate_sms_message(delivery_record, lead_record, client_config)
+        message = _generate_sms_message(delivery_record, lead_record, None)
         success, error_message, status_code = await sms_adapter.send_sms(
             to_number=delivery_record.destination,
             message=message,
@@ -219,12 +262,12 @@ async def _deliver_sms(delivery_record, lead_record, client_config) -> tuple[boo
         await sms_adapter.close()
 
 
-async def _deliver_email(delivery_record, lead_record, client_config) -> tuple[bool, str | None, int | None]:
+async def _deliver_email(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver email message."""
     email_adapter = SendGridEmailAdapter()
     
     try:
-        subject, body = _generate_email_content(delivery_record, lead_record, client_config)
+        subject, body = _generate_email_content(delivery_record, lead_record, None)
         success, error_message, status_code = await email_adapter.send_email(
             to_address=delivery_record.destination,
             subject=subject,
@@ -237,49 +280,22 @@ async def _deliver_email(delivery_record, lead_record, client_config) -> tuple[b
 
 def _generate_sms_message(delivery_record, lead_record, client_config) -> str:
     """Generate SMS message based on purpose."""
-    templates = client_config.message_templates or {}
-    
+    # Use stored message templates from client config or defaults
     if delivery_record.purpose.value == "LEAD_DELIVERY":
         # Lead summary to internal recipients
-        template = templates.get("sms_summary_template")
-        if template:
-            return template.format(
-                service_requested=lead_record.service_requested or "Unknown",
-                caller_phone=lead_record.caller_phone,
-                urgency=lead_record.urgency.value,
-                classification=lead_record.classification.value,
-                timestamp=format_timestamp(lead_record.created_at),
-            )
-        else:
-            # Default template
-            return f"New lead: {lead_record.service_requested or 'Unknown'} from {lead_record.caller_phone}. Urgency: {lead_record.urgency.value}. Status: {lead_record.classification.value}."
+        return f"New lead: {lead_record.service_requested or 'Unknown'} from {lead_record.caller_phone}. Urgency: {lead_record.urgency.value}. Status: {lead_record.classification.value}."
     
     elif delivery_record.purpose.value == "FOLLOWUP_CONFIRMATION":
         # Confirmation to caller
-        template = templates.get("sms_confirmation_template")
-        if template:
-            return template.format(service_requested=lead_record.service_requested or "service")
-        else:
-            return f"Thanks — we received your request for {lead_record.service_requested or 'service'}. We'll follow up soon."
+        return f"Thanks — we received your request for {lead_record.service_requested or 'service'}. We'll follow up soon."
     
     elif delivery_record.purpose.value == "FOLLOWUP_REMINDER":
         # Reminder to caller
-        template = templates.get("sms_reminder_template")
-        if template:
-            return template
-        else:
-            return "Quick check-in: we're reviewing your request. Reply YES if you still need help today."
+        return "Quick check-in: we're reviewing your request. Reply YES if you still need help today."
     
     elif delivery_record.purpose.value == "URGENT_ESCALATION":
         # Urgent escalation to internal team
-        template = templates.get("sms_escalation_template")
-        if template:
-            return template.format(
-                service_requested=lead_record.service_requested or "Unknown",
-                caller_phone=lead_record.caller_phone,
-            )
-        else:
-            return f"URGENT lead: {lead_record.service_requested or 'Unknown'} from {lead_record.caller_phone} needs same-day service."
+        return f"URGENT lead: {lead_record.service_requested or 'Unknown'} from {lead_record.caller_phone} needs same-day service."
     
     else:
         return f"Notification about lead {lead_record.lead_id}"
@@ -287,48 +303,26 @@ def _generate_sms_message(delivery_record, lead_record, client_config) -> str:
 
 def _generate_email_content(delivery_record, lead_record, client_config) -> tuple[str, str]:
     """Generate email subject and body."""
-    templates = client_config.message_templates or {}
-    
     if delivery_record.purpose.value == "LEAD_DELIVERY":
         # Lead summary email
-        subject_template = templates.get("email_subject_template")
-        body_template = templates.get("email_body_template")
+        subject = f"New Lead: {lead_record.service_requested or 'Unknown'} ({lead_record.classification.value})"
         
-        subject = subject_template.format(
-            service_requested=lead_record.service_requested or "Unknown",
-            classification=lead_record.classification.value,
-        ) if subject_template else f"New Lead: {lead_record.service_requested or 'Unknown'} ({lead_record.classification.value})"
-        
-        if body_template:
-            body = body_template.format(
-                lead_id=lead_record.lead_id,
-                call_id=lead_record.call_id,
-                caller_name=lead_record.caller_name or "Not provided",
-                caller_phone=lead_record.caller_phone,
-                service_requested=lead_record.service_requested or "Not provided",
-                urgency=lead_record.urgency.value,
-                budget=lead_record.budget or "Not specified",
-                location_zip=lead_record.location_zip or "Not provided",
-                classification=lead_record.classification.value,
-                qualification_outcome=lead_record.qualification_outcome,
-                reason_codes=", ".join(lead_record.reason_codes) if lead_record.reason_codes else "None",
-                timestamp=format_timestamp(lead_record.created_at),
-            )
-        else:
-            # Default body
-            body = f"""Lead Summary:
+        body = f"""Lead Summary:
 
 Lead ID: {lead_record.lead_id}
 Call ID: {lead_record.call_id}
 Caller: {lead_record.caller_name or 'Not provided'}
 Phone: {lead_record.caller_phone}
 Service: {lead_record.service_requested or 'Not provided'}
+Service Type: {lead_record.service_type_normalized.value if lead_record.service_type_normalized else 'Unknown'}
 Urgency: {lead_record.urgency.value}
 Budget: {lead_record.budget or 'Not specified'}
 Location: {lead_record.location_zip or 'Not provided'}
 Classification: {lead_record.classification.value}
 Qualification: {lead_record.qualification_outcome}
 Reason Codes: {', '.join(lead_record.reason_codes) if lead_record.reason_codes else 'None'}
+Routing Profile: {lead_record.routing_profile_name or 'None'}
+Time Window: {lead_record.time_window or 'None'}
 Timestamp: {format_timestamp(lead_record.created_at)}
 """
         

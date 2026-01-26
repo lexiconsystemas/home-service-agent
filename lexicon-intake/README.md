@@ -10,6 +10,8 @@ A production-ready, repeatable intake MVP for home service businesses. This syst
 - **Retry-Safe**: Webhook delivery includes automatic retry with backoff
 - **Multi-Channel**: Support for Webhook, SMS, and Email delivery
 - **Follow-Up Automation**: Configurable confirmation, reminder, and escalation messages
+- **Routing Profiles**: Configuration-only routing by service type and business hours
+- **Service Type Normalization**: Deterministic keyword-based service type detection
 
 ## Tech Stack
 
@@ -23,6 +25,7 @@ A production-ready, repeatable intake MVP for home service businesses. This syst
 - Twilio (SMS)
 - SendGrid (Email)
 - pytest (tests)
+- ruff (linting)
 
 ## Quick Start
 
@@ -51,7 +54,7 @@ cp .env.example .env
 # Start all services
 docker compose up --build
 
-# Initialize database (in separate terminal)
+# Initialize database with seed data
 docker compose exec api bash scripts/init_db.sh
 ```
 
