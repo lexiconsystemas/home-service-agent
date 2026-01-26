@@ -42,7 +42,7 @@ async def provision_client(
     template = await load_template(template_name)
     
     # Generate client API key
-    client_api_key = await generate_client_api_key()
+    client_api_key = await generate_client_api_key(client_id)
     
     # Connect to database
     conn = await asyncpg.connect(database_url)

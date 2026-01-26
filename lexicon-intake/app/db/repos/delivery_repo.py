@@ -124,6 +124,7 @@ class DeliveryRepository:
     
     async def get_failed_final_deliveries(
         self,
+        client_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[DeliveryRecord]:
@@ -133,7 +134,14 @@ class DeliveryRepository:
                 DeliveryRecord.failed_final == True,
                 DeliveryRecord.status == DeliveryStatus.FAILED_FINAL
             )
-        ).order_by(desc(DeliveryRecord.last_attempt_at)).limit(limit).offset(offset)
+        )
+        
+        # Add client_id filter if provided
+        if client_id:
+            from app.db.tables.lead_record import LeadRecord
+            query = query.join(LeadRecord).where(LeadRecord.client_id == client_id)
+        
+        query = query.order_by(desc(DeliveryRecord.last_attempt_at)).limit(limit).offset(offset)
         
         result = await self.session.execute(query)
         return list(result.scalars().all())

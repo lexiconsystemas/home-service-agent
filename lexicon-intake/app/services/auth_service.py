@@ -15,9 +15,9 @@ class AuthService:
     """Service for handling authentication and authorization."""
     
     @staticmethod
-    def generate_client_api_key() -> str:
-        """Generate a secure client API key."""
-        return f"lexicon_client_{secrets.token_urlsafe(32)}"
+    def generate_client_api_key(client_id: str) -> str:
+        """Generate a secure client API key with embedded client ID."""
+        return f"lexicon_client_{client_id}_{secrets.token_urlsafe(32)}"
     
     @staticmethod
     def hash_api_key(api_key: str) -> str:

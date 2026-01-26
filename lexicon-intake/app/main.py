@@ -121,7 +121,7 @@ if __name__ == "__main__":
     setup_logging()
     uvicorn.run(
         "app.main:app",
-        host=settings.API_HOST,
-        port=settings.API_PORT,
-        reload=settings.API_RELOAD,
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=settings.api_reload,
     )

@@ -18,15 +18,16 @@ class TestClientProvisioning:
     @pytest.mark.asyncio
     async def test_generate_client_api_key_format(self):
         """Test that generated client API keys have correct format."""
-        api_key = await generate_client_api_key()
+        api_key = await generate_client_api_key("test-client")
         
         # Verify format
         assert api_key.startswith("lexicon_client_")
+        assert "test-client" in api_key  # Should contain client_id
         assert len(api_key) > 20  # Should be sufficiently long
         assert "_" in api_key  # Should have separators
         
         # Verify it's different each time
-        api_key2 = await generate_client_api_key()
+        api_key2 = await generate_client_api_key("test-client")
         assert api_key != api_key2
     
     @pytest.mark.asyncio

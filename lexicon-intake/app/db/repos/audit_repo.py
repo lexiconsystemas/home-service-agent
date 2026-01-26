@@ -48,6 +48,7 @@ class AuditRepository:
         actor_type: str | None = None,
         actor_id: str | None = None,
         action: str | None = None,
+        client_id: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[AuditLog]:
@@ -64,6 +65,8 @@ class AuditRepository:
             query = query.where(AuditLog.actor_id == actor_id)
         if action:
             query = query.where(AuditLog.action == action)
+        if client_id:
+            query = query.where(AuditLog.target_id == client_id)
         
         query = query.limit(limit).offset(offset)
         

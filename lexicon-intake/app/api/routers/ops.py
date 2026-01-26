@@ -135,6 +135,7 @@ async def get_dlq_deliveries(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
     api_key: str = Depends(verify_admin_api_key),
+    client_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -143,6 +144,7 @@ async def get_dlq_deliveries(
     
     # Get failed final deliveries
     deliveries = await delivery_repo.get_failed_final_deliveries(
+        client_id=client_id,
         limit=limit,
         offset=offset,
     )
@@ -180,6 +182,7 @@ async def get_audit_logs(
     actor_type: str | None = None,
     actor_id: str | None = None,
     action: str | None = None,
+    client_id: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
@@ -192,6 +195,7 @@ async def get_audit_logs(
         actor_type=actor_type,
         actor_id=actor_id,
         action=action,
+        client_id=client_id,
         limit=limit,
         offset=offset,
     )

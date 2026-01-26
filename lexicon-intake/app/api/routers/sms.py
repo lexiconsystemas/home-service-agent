@@ -36,7 +36,7 @@ async def verify_twilio_signature(request: Request) -> bool:
         body = await request.body()
         
         # Create validator with Twilio auth token
-        validator = RequestValidator(settings.TWILIO_AUTH_TOKEN)
+        validator = RequestValidator(settings.twilio_auth_token)
         
         # Verify the signature
         is_valid = validator.validate(
