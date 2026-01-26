@@ -47,7 +47,7 @@ async def seed_data():
             print('Demo client already exists')
             return
         
-        # Create demo client
+        # Create demo client with Phase 2 configuration
         demo_client = ClientConfig(
             client_id='demo',
             to_number='+15550001111',
@@ -56,9 +56,39 @@ async def seed_data():
                 'service_types_allowed': ['plumbing', 'electrical', 'hvac'],
                 'service_area_zip_prefixes': ['90210', '90211', '90212'],
                 'min_budget': 100,
-                'urgency_allowed': ['low', 'medium', 'high']
+                'urgency_allowed': ['low', 'medium', 'high', 'same_day']
             }),
+            delivery_channels=['WEBHOOK'],
             webhook_url='http://requestbin.local/',
+            sms_to_numbers=[],
+            email_to_addresses=[],
+            message_templates={
+                'sms_summary_template': 'New lead: {service_requested} from {caller_phone}. Urgency: {urgency}. Status: {classification}.',
+                'sms_confirmation_template': 'Thanks — we received your request for {service_requested}. We\'ll follow up soon.',
+                'sms_reminder_template': 'Quick check-in: we\'re reviewing your request. Reply YES if you still need help today.',
+                'sms_escalation_template': 'URGENT lead: {service_requested} from {caller_phone} needs same-day service.',
+                'email_subject_template': 'New Lead: {service_requested} ({classification})',
+                'email_body_template': '''Lead Summary:
+
+Lead ID: {lead_id}
+Call ID: {call_id}
+Caller: {caller_name}
+Phone: {caller_phone}
+Service: {service_requested}
+Urgency: {urgency}
+Budget: {budget}
+Location: {location_zip}
+Classification: {classification}
+Qualification: {qualification_outcome}
+Reason Codes: {reason_codes}
+Timestamp: {timestamp}'''
+            },
+            followup_flags={
+                'send_confirmation_to_caller': False,
+                'send_reminder_to_caller': False,
+                'reminder_delay_minutes': 30,
+                'urgent_escalation': False
+            },
             followup_enabled=False,
             followup_confirmation_enabled=False,
             followup_reminder_enabled=False,
@@ -67,7 +97,7 @@ async def seed_data():
         
         session.add(demo_client)
         await session.commit()
-        print('Demo client created successfully')
+        print('Demo client created successfully with Phase 2 configuration')
 
 asyncio.run(seed_data())
 "

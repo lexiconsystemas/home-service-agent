@@ -8,7 +8,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import health, calls
+from app.api.routers import health, calls, admin
 from app.core.logging import setup_logging
 from app.settings import settings
 
@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 app = FastAPI(
     title="Lexicon Systemas Intake System",
     description="Home Services Intake MVP",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -58,12 +58,13 @@ async def request_id_middleware(request: Request, call_next):
 # Include routers
 app.include_router(health.router, prefix="/healthz", tags=["health"])
 app.include_router(calls.router, prefix="/v1/calls", tags=["calls"])
+app.include_router(admin.router, prefix="/v1/admin", tags=["admin"])
 
 
 @app.get("/")
 async def root() -> dict[str, str]:
     """Root endpoint."""
-    return {"service": "Lexicon Intake System", "version": "0.1.0"}
+    return {"service": "Lexicon Intake System", "version": "0.2.0"}
 
 
 if __name__ == "__main__":
