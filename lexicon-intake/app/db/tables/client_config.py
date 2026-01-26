@@ -1,56 +1,121 @@
 """Client configuration table."""
 
-from sqlalchemy import Column, String, Boolean, JSON, ARRAY, Index
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import JSON, String, Text, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 
 class ClientConfig(Base):
-    """Client configuration model."""
+    """Client configuration table."""
     
     __tablename__ = "client_configs"
     
-    # Primary key
-    id = Column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+    )
     
-    # Basic configuration
-    client_id = Column(String(255), nullable=False, unique=True, index=True)
-    to_number = Column(String(20), nullable=False, index=True)
-    greeting = Column(String(255), nullable=True)
+    client_id: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
     
-    # Qualification rules
-    rules_json = Column(JSON, nullable=True)
+    to_number: Mapped[str] = mapped_column(
+        String(20),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
     
-    # Delivery channels configuration
-    delivery_channels = Column(ARRAY(String), nullable=False, default=["WEBHOOK"])
-    webhook_url = Column(String(2048), nullable=True)
-    sms_to_numbers = Column(ARRAY(String), nullable=True)
-    email_to_addresses = Column(ARRAY(String), nullable=True)
+    greeting_message: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="Thank you for calling. How can we help you today?",
+    )
     
-    # Message templates
-    message_templates = Column(JSON, nullable=True)
+    rules_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
     
-    # Follow-up configuration
-    followup_flags = Column(JSON, nullable=True)
+    routing_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
     
-    # Legacy fields for backward compatibility
-    followup_enabled = Column(Boolean, nullable=False, default=False)
-    followup_confirmation_enabled = Column(Boolean, nullable=False, default=False)
-    followup_reminder_enabled = Column(Boolean, nullable=False, default=False)
-    followup_escalation_enabled = Column(Boolean, nullable=False, default=False)
+    delivery_channels: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
     
-    # Phase 2.5: Routing configuration
-    routing_json = Column(JSON, nullable=True)
+    webhook_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     
-    # Relationships
-    call_records = relationship("CallRecord", back_populates="client_config")
-    lead_records = relationship("LeadRecord", back_populates="client_config")
-    delivery_records = relationship("DeliveryRecord", back_populates="client_config")
+    sms_to_numbers: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
     
-    # Indexes for performance
+    email_to_addresses: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
+    
+    message_templates: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    
+    followup_flags: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=dict,
+    )
+    
+    client_api_key: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Per-client API key for webhook verification",
+    )
+    
+    version: Mapped[int] = mapped_column(
+        String(20),
+        nullable=False,
+        default=1,
+        comment="Configuration version for rollback support",
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    
+    # Indexes for common queries
     __table_args__ = (
-        Index('idx_client_configs_client_id', 'client_id'),
-        Index('idx_client_configs_to_number', 'to_number'),
+        {"schema": "lexicon_intake"},
     )
