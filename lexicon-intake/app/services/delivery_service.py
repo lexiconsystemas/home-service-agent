@@ -89,21 +89,30 @@ class DeliveryService:
             
             logger.info("Enqueuing follow-up reminder", lead_id=lead_id, delay_minutes=delay_minutes)
             
-            # Get lead record to check if qualified
+            # Get lead record to check if qualified (outside transaction - read-only)
             lead_record = await self.lead_repo.get_by_lead_id(lead_id)
             if not lead_record or lead_record.classification.value != "QUALIFIED":
                 logger.info("Skipping reminder - not qualified", lead_id=lead_id)
                 return
             
-            # Create delivery record first
-            delivery_record = await self.delivery_repo.create_delivery_record(
-                lead_id=lead_id,
-                channel=DeliveryChannel.SMS,
-                purpose=DeliveryPurpose.FOLLOWUP_REMINDER,
-                destination=lead_record.caller_phone,
-            )
+            # ATOMIC TRANSACTION: Create delivery record and enqueue task
+            async with self.db.begin():
+                # Create delivery record first
+                delivery_record = await self.delivery_repo.create_delivery_record(
+                    lead_id=lead_id,
+                    channel=DeliveryChannel.SMS,
+                    purpose=DeliveryPurpose.FOLLOWUP_REMINDER,
+                    destination=lead_record.caller_phone,
+                )
+                
+                logger.info(
+                    "Follow-up reminder delivery record created",
+                    lead_id=lead_id,
+                    delivery_id=str(delivery_record.id),
+                    delay_minutes=delay_minutes,
+                )
             
-            # Enqueue delayed task
+            # Enqueue delayed task AFTER transaction commit
             await enqueue_followup_task(
                 delivery_id=str(delivery_record.id),
                 delay_minutes=delay_minutes,
@@ -196,15 +205,26 @@ class DeliveryService:
             )
             return
         
-        # Create delivery record
-        delivery_record = await self.delivery_repo.create_delivery_record(
-            lead_id=lead_id,
-            channel=channel,
-            purpose=purpose,
-            destination=destination,
-        )
+        # ATOMIC TRANSACTION: Create delivery record and enqueue task
+        async with self.db.begin():
+            # Create delivery record
+            delivery_record = await self.delivery_repo.create_delivery_record(
+                lead_id=lead_id,
+                channel=channel,
+                purpose=purpose,
+                destination=destination,
+            )
+            
+            logger.info(
+                "Delivery record created",
+                lead_id=lead_id,
+                delivery_id=str(delivery_record.id),
+                channel=channel.value,
+                purpose=purpose.value,
+                destination=destination,
+            )
         
-        # Enqueue delivery task
+        # Enqueue delivery task AFTER transaction commit
         await enqueue_delivery_task(str(delivery_record.id))
         
         logger.info(

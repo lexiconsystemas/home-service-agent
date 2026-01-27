@@ -54,7 +54,7 @@ class IntakeService:
         utc_timestamp = utc_now()
         
         try:
-            # Get client configuration
+            # Get client configuration (outside transaction - read-only operation)
             client_config = await self.client_repo.get_by_to_number(call_event.to_number)
             if not client_config:
                 # Fallback to demo client
@@ -70,7 +70,7 @@ class IntakeService:
                 has_routing=bool(client_config.routing_json),
             )
             
-            # Normalize service type
+            # Process call data (outside transaction - business logic)
             service_type, service_reason_codes = self.service_normalization_service.normalize_service_type(
                 call_event.service_requested or ""
             )
@@ -151,46 +151,45 @@ class IntakeService:
                 "reason_codes": routing_reason_codes,
             }
             
-            # Create lead record with routing decision inside transaction
-            lead_record = await self.lead_repo.create_lead(
-                lead_id=lead_id,
-                call_id=call_event.call_id,
-                client_id=client_config.client_id,
-                caller_name=call_event.caller_name,
-                caller_phone=call_event.from_number,
-                service_requested=call_event.service_requested,
-                service_type_normalized=service_type,
-                service_normalization_reason_codes=service_reason_codes,
-                urgency=call_event.urgency,
-                budget=call_event.budget,
-                location_zip=call_event.location_zip,
-                classification=classification_result.classification,
-                reason_codes=all_reason_codes,
-                qualification_outcome=qualification_result.outcome,
-                routing_profile_name=routing_decision["profile_name"],
-                time_window=routing_decision["time_window"],
-                timezone_used=routing_decision["timezone_used"],
-                computed_local_time=routing_decision["computed_local_time"],
-                chosen_channels=routing_decision["chosen_channels"],
-                chosen_destinations=routing_decision["chosen_destinations"],
-                routing_reason_codes=routing_decision["reason_codes"],
-            )
+            # ATOMIC TRANSACTION: Create lead record and related data
+            async with self.db.begin():
+                # Create lead record with routing decision
+                lead_record = await self.lead_repo.create_lead(
+                    lead_id=lead_id,
+                    call_id=call_event.call_id,
+                    client_id=client_config.client_id,
+                    caller_name=call_event.caller_name,
+                    caller_phone=call_event.from_number,
+                    service_requested=call_event.service_requested,
+                    service_type_normalized=service_type,
+                    service_normalization_reason_codes=service_reason_codes,
+                    urgency=call_event.urgency,
+                    budget=call_event.budget,
+                    location_zip=call_event.location_zip,
+                    classification=classification_result.classification,
+                    reason_codes=all_reason_codes,
+                    qualification_outcome=qualification_result.outcome,
+                    routing_profile_name=routing_decision["profile_name"],
+                    time_window=routing_decision["time_window"],
+                    timezone_used=routing_decision["timezone_used"],
+                    computed_local_time=routing_decision["computed_local_time"],
+                    chosen_channels=routing_decision["chosen_channels"],
+                    chosen_destinations=routing_decision["chosen_destinations"],
+                    routing_reason_codes=routing_decision["reason_codes"],
+                )
+                
+                logger.info(
+                    "Lead record created with routing",
+                    lead_id=lead_id,
+                    classification=classification_result.classification.value,
+                    service_type=service_type.value,
+                    routing_profile=routing_decision["profile_name"],
+                    time_window=routing_decision["time_window"],
+                    chosen_channels=routing_decision["chosen_channels"],
+                    reason_codes=all_reason_codes,
+                )
             
-            logger.info(
-                "Lead record created with routing",
-                lead_id=lead_id,
-                classification=classification_result.classification.value,
-                service_type=service_type.value,
-                routing_profile=routing_decision["profile_name"],
-                time_window=routing_decision["time_window"],
-                chosen_channels=routing_decision["chosen_channels"],
-                reason_codes=all_reason_codes,
-            )
-            
-            # Commit transaction before enqueuing tasks
-            await self.db.commit()
-            
-            # Enqueue tasks AFTER commit
+            # Enqueue tasks AFTER transaction commit
             delivery_success = True
             if classification_result.classification.value == "QUALIFIED":
                 delivery_success = await self._enqueue_delivery_with_routing(
@@ -233,8 +232,6 @@ class IntakeService:
             return CallEventResponse(**response_data)
             
         except Exception as e:
-            # Rollback on any error
-            await self.db.rollback()
             logger.error(
                 "Failed to process inbound call",
                 call_id=call_event.call_id,
