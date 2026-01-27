@@ -1,0 +1,67 @@
+# Railway ignore file - exclude unnecessary files from deployment
+
+# Development files
+.env.local
+.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README.md)
+docs/
+*.md
+!README.md
+
+# Docker (not needed for Railway)
+docker/
+Dockerfile*
+docker-compose*
+
+# Local scripts (keep railway-start.sh)
+scripts/
+!scripts/railway-start.sh
+
+# Logs
+*.log
+logs/

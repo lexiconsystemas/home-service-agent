@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000, description="API port")
     api_reload: bool = Field(default=False, description="Enable auto-reload")
     
+    # Railway PORT support
+    port: int = Field(default=8000, description="Port for Railway deployment")
+    
     # Security
     secret_key: str = Field(
         default="change-in-production",
@@ -80,6 +83,13 @@ class Settings(BaseSettings):
         """Parse CORS origins from string or list."""
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    @validator("database_url", pre=True)
+    def convert_database_url(cls, v):
+        """Convert postgresql:// to postgresql+asyncpg:// for async SQLAlchemy."""
+        if isinstance(v, str) and v.startswith("postgresql://"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v
     
     class Config:

@@ -1,0 +1,39 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "bash scripts/railway-start.sh web"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[env]
+PYTHON_VERSION = "3.12"
+
+[[services]]
+name = "web"
+source = "."
+[services.web]
+[services.web.build]
+builder = "nixpacks"
+buildCommand = "pip install -e ."
+
+[services.web.deploy]
+startCommand = "bash scripts/railway-start.sh web"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/"
+healthcheckTimeout = 100
+readinessPath = "/"
+
+[[services]]
+name = "worker"
+source = "."
+[services.worker]
+[services.worker.build]
+builder = "nixpacks"
+buildCommand = "pip install -e ."
+
+[services.worker.deploy]
+startCommand = "bash scripts/railway-start.sh worker"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

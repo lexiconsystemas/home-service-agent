@@ -17,6 +17,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
+# Railway deployment configuration
+[tool.railway]
+name = "lexicon-intake"
+python_version = "3.12"
+
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
