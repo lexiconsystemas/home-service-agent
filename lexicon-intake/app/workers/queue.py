@@ -1,7 +1,8 @@
 """Redis Queue worker setup."""
 
 import redis
-from rq import Worker, Queue, Connection
+from rq import Worker, Queue
+from rq.connections import RedisConnection
 import structlog
 
 from app.settings import settings

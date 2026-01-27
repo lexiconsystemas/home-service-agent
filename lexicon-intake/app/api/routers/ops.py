@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_async_session
+from app.db.session import get_async_session
 from app.core.errors import LexiconError
 from app.db.repos.audit_repo import AuditRepository
 from app.db.repos.delivery_repo import DeliveryRepository
@@ -14,7 +14,7 @@ from app.db.repos.lead_repo import LeadRepository
 from app.db.tables.delivery_record import DeliveryRecord, DeliveryStatus
 from app.services.delivery_service import DeliveryService
 from app.settings import settings
-from app.workers.tasks import enqueue_delivery_task
+from app.workers.queue import enqueue_delivery_task
 import structlog
 
 logger = structlog.get_logger()

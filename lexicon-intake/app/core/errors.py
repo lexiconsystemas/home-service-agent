@@ -46,6 +46,20 @@ class DeliveryError(LexiconError):
         super().__init__(message, "DELIVERY_ERROR")
 
 
+class DuplicateCallError(LexiconError):
+    """Exception raised when a duplicate call is detected."""
+    
+    def __init__(self, message: str) -> None:
+        super().__init__(message, "DUPLICATE_CALL")
+
+
+class RateLimitExceededError(LexiconError):
+    """Exception raised when rate limit is exceeded."""
+    
+    def __init__(self, message: str) -> None:
+        super().__init__(message, "RATE_LIMIT_EXCEEDED")
+
+
 async def lexicon_exception_handler(request: Request, exc: LexiconError) -> JSONResponse:
     """
     Global exception handler for Lexicon errors.
@@ -71,6 +85,10 @@ async def lexicon_exception_handler(request: Request, exc: LexiconError) -> JSON
         status_code = status.HTTP_400_BAD_REQUEST
     elif isinstance(exc, DeliveryError):
         status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    elif isinstance(exc, DuplicateCallError):
+        status_code = status.HTTP_409_CONFLICT
+    elif isinstance(exc, RateLimitExceededError):
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS
     else:
         status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     

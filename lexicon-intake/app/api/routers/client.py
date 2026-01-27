@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_async_session
+from app.db.session import get_async_session
 from app.core.errors import LexiconError
 from app.db.repos.client_repo import ClientRepository
 from app.services.auth_service import AuthService

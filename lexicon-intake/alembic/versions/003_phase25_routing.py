@@ -38,13 +38,6 @@ def upgrade() -> None:
     op.add_column('lead_records', sa.Column('chosen_destinations', postgresql.JSON(astext_type=sa.Text()), nullable=True))
     op.add_column('lead_records', sa.Column('routing_reason_codes', postgresql.ARRAY(sa.String()), nullable=True))
     
-    # Update delivery_pending to be a string for better compatibility
-    op.alter_column('lead_records', 'delivery_pending',
-                    existing_type=sa.String(length=20),
-                    type_=sa.String(length=20),
-                    existing_nullable=False,
-                    server_default='true')
-    
     # Create indexes for new routing fields
     op.create_index('idx_lead_records_service_type', 'lead_records', ['service_type_normalized'], unique=False)
     op.create_index('idx_lead_records_routing_profile', 'lead_records', ['routing_profile_name'], unique=False)

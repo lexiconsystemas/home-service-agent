@@ -7,7 +7,7 @@ from urllib.parse import parse_qs
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_async_session
+from app.db.session import get_async_session
 from app.core.errors import LexiconError
 from app.db.repos.audit_repo import AuditRepository
 from app.db.repos.lead_repo import LeadRepository
