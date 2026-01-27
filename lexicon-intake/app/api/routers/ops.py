@@ -25,7 +25,7 @@ router = APIRouter()
 async def verify_admin_api_key(request: Request) -> str:
     """Verify admin API key from header."""
     api_key = request.headers.get("X-Admin-API-Key")
-    if not api_key or api_key != settings.ADMIN_API_KEY:
+    if not api_key or api_key != settings.admin_api_key:
         raise HTTPException(
             status_code=401,
             detail="Invalid admin API key",
