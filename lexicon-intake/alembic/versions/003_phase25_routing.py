@@ -17,14 +17,21 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Create enum types first
+    servicetype_enum = postgresql.ENUM('hvac_repair', 'hvac_install', 'plumbing', 'pressure_wash', 'restoration', 'unknown', name='servicetype')
+    timewindow_enum = postgresql.ENUM('IN_HOURS', 'AFTER_HOURS', name='timewindow')
+    
+    servicetype_enum.create(op.get_bind())
+    timewindow_enum.create(op.get_bind())
+    
     # Add new columns to client_configs
     op.add_column('client_configs', sa.Column('routing_json', postgresql.JSON(astext_type=sa.Text()), nullable=True))
     
     # Add new columns to lead_records
-    op.add_column('lead_records', sa.Column('service_type_normalized', sa.Enum('hvac_repair', 'hvac_install', 'plumbing', 'pressure_wash', 'restoration', 'unknown', name='servicetype'), nullable=True))
+    op.add_column('lead_records', sa.Column('service_type_normalized', servicetype_enum, nullable=True))
     op.add_column('lead_records', sa.Column('service_normalization_reason_codes', postgresql.ARRAY(sa.String()), nullable=True))
     op.add_column('lead_records', sa.Column('routing_profile_name', sa.String(length=255), nullable=True))
-    op.add_column('lead_records', sa.Column('time_window', sa.Enum('IN_HOURS', 'AFTER_HOURS', name='timewindow'), nullable=True))
+    op.add_column('lead_records', sa.Column('time_window', timewindow_enum, nullable=True))
     op.add_column('lead_records', sa.Column('timezone_used', sa.String(length=50), nullable=True))
     op.add_column('lead_records', sa.Column('computed_local_time', sa.DateTime(timezone=True), nullable=True))
     op.add_column('lead_records', sa.Column('chosen_channels', postgresql.ARRAY(sa.String()), nullable=True))

@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     # Add new columns to client_configs
-    op.add_column('client_configs', sa.Column('delivery_channels', postgresql.ARRAY(sa.String()), nullable=False, server_default='["WEBHOOK"]'))
+    op.add_column('client_configs', sa.Column('delivery_channels', postgresql.ARRAY(sa.String()), nullable=False, server_default=sa.text("ARRAY['WEBHOOK']")))
     op.add_column('client_configs', sa.Column('sms_to_numbers', postgresql.ARRAY(sa.String()), nullable=True))
     op.add_column('client_configs', sa.Column('email_to_addresses', postgresql.ARRAY(sa.String()), nullable=True))
     op.add_column('client_configs', sa.Column('message_templates', postgresql.JSON(astext_type=sa.Text()), nullable=True))
