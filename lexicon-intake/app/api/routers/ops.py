@@ -13,6 +13,7 @@ from app.db.repos.delivery_repo import DeliveryRepository
 from app.db.repos.lead_repo import LeadRepository
 from app.db.tables.delivery_record import DeliveryRecord, DeliveryStatus
 from app.services.delivery_service import DeliveryService
+from app.services.auth_service import AuthService
 from app.settings import settings
 from app.workers.queue import enqueue_delivery_task
 import structlog
@@ -22,15 +23,40 @@ logger = structlog.get_logger()
 router = APIRouter()
 
 
-async def verify_admin_api_key(request: Request) -> str:
-    """Verify admin API key from header."""
+async def verify_admin_api_key(request: Request) -> tuple[str, bool]:
+    """Verify admin API key from header. Returns (api_key, is_admin)."""
     api_key = request.headers.get("X-Admin-API-Key")
     if not api_key or api_key != settings.admin_api_key:
         raise HTTPException(
             status_code=401,
             detail="Invalid admin API key",
         )
-    return api_key
+    return api_key, True
+
+
+async def verify_api_key(request: Request) -> tuple[str, bool, str | None]:
+    """Verify API key from header. Returns (api_key, is_admin, client_id)."""
+    api_key = request.headers.get("X-Admin-API-Key")
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="API key required",
+        )
+    
+    # Check if it's an admin API key
+    if api_key == settings.admin_api_key:
+        return api_key, True, None
+    
+    # Check if it's a client API key
+    client_id = AuthService.extract_client_id_from_api_key(api_key)
+    if client_id:
+        return api_key, False, client_id
+    
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid API key",
+    )
 
 
 @router.post("/v1/delivery/{delivery_id}/replay")
@@ -38,7 +64,7 @@ async def replay_delivery(
     delivery_id: str,
     request: Request,
     session: AsyncSession = Depends(get_async_session),
-    api_key: str = Depends(verify_admin_api_key),
+    auth_info: tuple[str, bool] = Depends(verify_admin_api_key),
 ) -> dict[str, Any]:
     """
     Replay a failed delivery.
@@ -134,12 +160,27 @@ async def replay_delivery(
 async def get_dlq_deliveries(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
-    api_key: str = Depends(verify_admin_api_key),
+    auth_info: tuple[str, bool, str | None] = Depends(verify_api_key),
     client_id: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
     """Get dead letter queue deliveries (final failed deliveries)."""
+    api_key, is_admin, request_client_id = auth_info
+    
+    # Enforce tenant filtering
+    if not is_admin:
+        # Clients can only see their own DLQ items
+        if client_id and client_id != request_client_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: cannot access other client's data",
+            )
+        client_id = request_client_id
+    elif client_id is None:
+        # Admins can see all, but if they specify a client_id, use it
+        client_id = client_id
+    
     delivery_repo = DeliveryRepository(session)
     
     # Get failed final deliveries
@@ -176,7 +217,7 @@ async def get_dlq_deliveries(
 async def get_audit_logs(
     request: Request,
     session: AsyncSession = Depends(get_async_session),
-    api_key: str = Depends(verify_admin_api_key),
+    auth_info: tuple[str, bool, str | None] = Depends(verify_api_key),
     target_type: str | None = None,
     target_id: str | None = None,
     actor_type: str | None = None,
@@ -187,6 +228,21 @@ async def get_audit_logs(
     offset: int = 0,
 ) -> dict[str, Any]:
     """Get audit logs with optional filters."""
+    api_key, is_admin, request_client_id = auth_info
+    
+    # Enforce tenant filtering
+    if not is_admin:
+        # Clients can only see their own audit logs
+        if client_id and client_id != request_client_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: cannot access other client's data",
+            )
+        client_id = request_client_id
+    elif client_id is None:
+        # Admins can see all, but if they specify a client_id, use it
+        client_id = client_id
+    
     audit_repo = AuditRepository(session)
     
     logs = await audit_repo.get_audit_logs(

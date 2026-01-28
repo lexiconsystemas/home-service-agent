@@ -3,7 +3,7 @@
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_, and_
 
 from app.db.tables.audit_log import AuditLog
 
@@ -65,8 +65,15 @@ class AuditRepository:
             query = query.where(AuditLog.actor_id == actor_id)
         if action:
             query = query.where(AuditLog.action == action)
+        
+        # Add client_id filtering - filter by actor_id when actor is CLIENT
+        # or by target_id when target is client_config
         if client_id:
-            query = query.where(AuditLog.target_id == client_id)
+            client_filter = or_(
+                and_(AuditLog.actor_type == "CLIENT", AuditLog.actor_id == client_id),
+                and_(AuditLog.target_type == "client_config", AuditLog.target_id == client_id),
+            )
+            query = query.where(client_filter)
         
         query = query.limit(limit).offset(offset)
         
