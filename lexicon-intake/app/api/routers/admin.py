@@ -1,6 +1,7 @@
 """Admin endpoints for client configuration management."""
 
 import re
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
@@ -11,6 +12,8 @@ import structlog
 from app.core.security import sanitize_phone_number
 from app.db.session import get_async_session
 from app.db.repos.client_repo import ClientRepository
+from app.db.repos.audit_repo import AuditRepository
+from app.db.repos.config_snapshot_repo import ConfigSnapshotRepository
 from app.services.routing_service import RoutingService
 from app.settings import settings
 
@@ -184,9 +187,12 @@ async def update_message_templates(
     # Store previous configuration
     old_config = client_config.message_templates.copy() if client_config.message_templates else {}
     
+    # Initialize audit repository
+    audit_repo = AuditRepository(db)
+    
     # Update message templates
     client_config.message_templates = templates.dict()
-    await session.flush()
+    await db.flush()
     
     # Log audit event
     await audit_repo.create_audit_log(

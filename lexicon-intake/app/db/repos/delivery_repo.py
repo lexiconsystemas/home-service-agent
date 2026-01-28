@@ -1,5 +1,6 @@
 """Delivery record repository."""
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
