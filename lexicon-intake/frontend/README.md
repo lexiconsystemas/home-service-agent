@@ -28,31 +28,51 @@ VITE_API_URL=http://localhost:8000
 
 ## Production Deployment
 
-### Vercel Deployment
-The frontend is configured for Vercel deployment with:
+### Netlify Deployment
+The frontend is configured for Netlify deployment with:
 
-1. **Automatic Configuration**: `vercel.json`
+1. **Automatic Configuration**: `netlify.toml`
 2. **Production Environment**: `.env.production`
 3. **Optimized Build**: `vite.config.ts` with code splitting
+4. **Build Script**: `netlify-build.sh` for custom builds
 
-#### Deploy to Vercel:
+#### Deploy to Netlify:
 ```bash
-# Install Vercel CLI
-npm i -g vercel
+# Install Netlify CLI
+npm i -g netlify-cli
 
-# Deploy
-vercel --prod
+# Login to Netlify
+netlify login
+
+# Deploy to production
+netlify deploy --prod --dir=dist
+
+# Or connect to Git for automatic deployments
+netlify init
+git push origin main
+```
+
+#### Manual Build:
+```bash
+# Make build script executable
+chmod +x netlify-build.sh
+
+# Run build script
+./netlify-build.sh
 ```
 
 ### Environment Configuration
 - **Development**: Uses `VITE_API_URL=http://localhost:8000`
 - **Production**: Uses `VITE_API_URL=https://lexicon-intake-production.up.railway.app`
+- **Deploy Previews**: Uses production API URL for testing
 
 ### Build Configuration
 - **Output Directory**: `dist/`
 - **Framework**: Vite
+- **Node Version**: 18 (required by Netlify)
 - **Code Splitting**: Optimized chunks for vendor libraries
 - **Source Maps**: Disabled in production
+- **SPA Routing**: All routes redirect to `index.html`
 
 ## Features
 - **Real-time Dashboard** with live metrics
