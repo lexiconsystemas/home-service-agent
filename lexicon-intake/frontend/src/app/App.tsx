@@ -1,51 +1,84 @@
-import { useState } from 'react';
-import { Sidebar } from '@/app/components/dashboard/Sidebar';
-import { Header } from '@/app/components/dashboard/Header';
-import { OverviewCards } from '@/app/components/dashboard/OverviewCards';
-import { CallPerformanceChart } from '@/app/components/dashboard/CallPerformanceChart';
-import { RevenueInsights } from '@/app/components/dashboard/RevenueInsights';
-import { ConversionFunnel } from '@/app/components/dashboard/ConversionFunnel';
-import { CallLogsTable } from '@/app/components/dashboard/CallLogsTable';
-import { AISummaryPanel } from '@/app/components/dashboard/AISummaryPanel';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AuthProvider, useAuth } from '../context/AuthContext';
+import { ProtectedRoute } from '../context/AuthContext';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
 
-export default function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+// Create a client for React Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
-  return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        isCollapsed={isSidebarCollapsed}
-        onClose={() => setIsSidebarOpen(false)}
-        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-      />
-      
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onMenuClick={() => setIsSidebarOpen(true)} />
-        
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-[1600px] mx-auto p-4 lg:p-8 space-y-6 lg:space-y-8">
-            {/* Overview Metrics */}
-            <OverviewCards />
-            
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <CallPerformanceChart />
-              <RevenueInsights />
-            </div>
-            
-            {/* Conversion Funnel */}
-            <ConversionFunnel />
-            
-            {/* Call Logs Table */}
-            <CallLogsTable />
-            
-            {/* AI Summary Panel */}
-            <AISummaryPanel />
-          </div>
-        </main>
+// Helper component for root route redirect
+const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
       </div>
-    </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Router>
+          <Routes>
+            {/* Root route - redirect based on auth status */}
+            <Route 
+              path="/" 
+              element={
+                <RequireAuth>
+                  <Navigate to="/dashboard" replace />
+                </RequireAuth>
+              } 
+            />
+            
+            {/* Login route */}
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected dashboard route */}
+            <Route 
+              path="/dashboard" 
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Catch all - redirect to dashboard */}
+            <Route 
+              path="*" 
+              element={
+                <RequireAuth>
+                  <Navigate to="/dashboard" replace />
+                </RequireAuth>
+              } 
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }
+
+export default App;

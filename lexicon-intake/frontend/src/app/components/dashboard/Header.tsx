@@ -1,11 +1,12 @@
-import { Bell, Calendar, ChevronDown, Menu } from 'lucide-react';
+import { Bell, Calendar, ChevronDown, Menu, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface HeaderProps {
   onMenuClick: () => void;
+  onLogout?: () => void;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, onLogout }: HeaderProps) {
   const today = new Date();
   
   return (
@@ -37,6 +38,16 @@ export function Header({ onMenuClick }: HeaderProps) {
           <Bell className="w-5 h-5 text-gray-600" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
         </button>
+        
+        {onLogout && (
+          <button 
+            onClick={onLogout}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-5 h-5 text-gray-600" />
+          </button>
+        )}
         
         <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-gray-200">
           <div className="text-right hidden lg:block">
