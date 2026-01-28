@@ -1,5 +1,9 @@
+import React from 'react';
 import { Bell, Calendar, ChevronDown, Menu, LogOut } from 'lucide-react';
 import { format } from 'date-fns';
+import { useProfile } from '../../../hooks/useDashboard';
+import { Skeleton } from '../../../components/ui/Skeleton';
+import { InlineError } from '../../../components/ui/ErrorDisplay';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -7,6 +11,7 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick, onLogout }: HeaderProps) {
+  const { data: profileData, isLoading, error } = useProfile();
   const today = new Date();
   
   return (
@@ -50,15 +55,35 @@ export function Header({ onMenuClick, onLogout }: HeaderProps) {
         )}
         
         <div className="hidden sm:flex items-center gap-3 pl-4 border-l border-gray-200">
-          <div className="text-right hidden lg:block">
-            <p className="text-sm font-medium text-gray-900">John's HVAC</p>
-            <p className="text-xs text-gray-500">{format(today, 'MMMM dd, yyyy')}</p>
-          </div>
-          <div className="w-10 h-10 bg-[#1e3a5f] rounded-full flex items-center justify-center text-white font-medium">
-            JH
-          </div>
+          {isLoading ? (
+            <div className="space-y-1">
+              <Skeleton variant="text" width="120px" />
+              <Skeleton variant="text" width="80px" />
+            </div>
+          ) : error ? (
+            <div className="text-right">
+              <InlineError message="Failed to load profile" />
+            </div>
+          ) : profileData?.success ? (
+            <>
+              <div className="text-right hidden lg:block">
+                <p className="text-sm font-medium text-gray-900">{profileData.data.business_name}</p>
+                <p className="text-xs text-gray-500">{format(today, 'MMMM dd, yyyy')}</p>
+              </div>
+              <div className="w-10 h-10 bg-[#1e3a5f] rounded-full flex items-center justify-center text-white font-medium">
+                {profileData.data.business_name
+                  .split(' ')
+                  .map(word => word[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2)}
+              </div>
+            </>
+          ) : null}
         </div>
       </div>
     </header>
   );
 }
+
+export default Header;

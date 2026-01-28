@@ -1,92 +1,130 @@
+import React from 'react';
 import { Users, PhoneCall, Calendar, CheckCircle } from 'lucide-react';
+import { useFunnel } from '../../../hooks/useDashboard';
+import { ChartSkeleton } from '../../../components/ui/Skeleton';
+import { ErrorDisplay } from '../../../components/ui/ErrorDisplay';
 
-const funnelSteps = [
-  { 
-    label: 'People Who Called', 
-    value: 247, 
-    percentage: 100,
-    icon: PhoneCall,
-    color: 'bg-blue-500',
-    description: 'Total incoming calls'
-  },
-  { 
-    label: 'Calls Answered', 
-    value: 224, 
-    percentage: 91,
-    icon: Users,
-    color: 'bg-indigo-500',
-    description: 'Successfully connected'
-  },
-  { 
-    label: 'Appointments Set', 
-    value: 178, 
-    percentage: 72,
-    icon: Calendar,
-    color: 'bg-purple-500',
-    description: 'Scheduled for service'
-  },
-  { 
-    label: 'Jobs Completed', 
-    value: 156, 
-    percentage: 63,
-    icon: CheckCircle,
-    color: 'bg-green-500',
-    description: 'Confirmed jobs done'
-  },
-];
+const ConversionFunnel: React.FC = () => {
+  const { data: funnelData, isLoading, error, refetch } = useFunnel();
 
-export function ConversionFunnel() {
+  if (isLoading) {
+    return <ChartSkeleton />;
+  }
+
+  if (error || !funnelData?.success) {
+    return (
+      <ErrorDisplay
+        message="Failed to load conversion funnel data"
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  const { funnel, rates } = funnelData.data;
+
+  const funnelSteps = [
+    { 
+      label: 'People Who Called', 
+      value: funnel.calls, 
+      percentage: 100,
+      icon: PhoneCall,
+      color: 'bg-blue-500',
+      description: 'Total incoming calls'
+    },
+    { 
+      label: 'Calls Answered', 
+      value: funnel.answered, 
+      percentage: rates.answer_rate,
+      icon: Users,
+      color: 'bg-indigo-500',
+      description: 'Successfully connected'
+    },
+    { 
+      label: 'Appointments Set', 
+      value: funnel.appointments, 
+      percentage: rates.appointment_rate,
+      icon: Calendar,
+      color: 'bg-purple-500',
+      description: 'Scheduled for service'
+    },
+    { 
+      label: 'Jobs Completed', 
+      value: funnel.completed, 
+      percentage: rates.completion_rate,
+      icon: CheckCircle,
+      color: 'bg-green-500',
+      description: 'Successfully completed'
+    },
+  ];
+
   return (
     <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Lead Conversion Journey</h3>
-        <p className="text-sm text-gray-500 mt-1">From first call to completed job</p>
+        <h3 className="text-lg font-semibold text-gray-900">Conversion Funnel</h3>
+        <p className="text-sm text-gray-500 mt-1">Track your conversion rates through the customer journey ({funnelData.data.period})</p>
       </div>
       
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {funnelSteps.map((step, index) => {
           const Icon = step.icon;
           return (
             <div key={step.label} className="relative">
-              <div className="flex items-center gap-4">
-                <div className={`${step.color} p-3 rounded-lg`}>
-                  <Icon className="w-5 h-5 text-white" />
+              {/* Connection line */}
+              {index < funnelSteps.length - 1 && (
+                <div className="absolute top-8 left-full w-full h-0.5 bg-gray-200 hidden lg:block" 
+                     style={{ width: 'calc(100% - 2rem)' }} />
+              )}
+              
+              <div className="text-center">
+                <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${step.color} mb-4 mx-auto`}>
+                  <Icon className="w-8 h-8 text-white" />
                 </div>
                 
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{step.label}</p>
-                      <p className="text-xs text-gray-500">{step.description}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-semibold text-gray-900">{step.value}</p>
-                      <p className="text-xs text-gray-500">{step.percentage}%</p>
-                    </div>
-                  </div>
-                  
-                  <div className="relative w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                <div className="mb-2">
+                  <div className="text-2xl font-bold text-gray-900">{step.value.toLocaleString()}</div>
+                  <div className="text-sm text-gray-500">{step.label}</div>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="text-lg font-semibold text-gray-700">{step.percentage.toFixed(1)}%</div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
-                      className={`absolute top-0 left-0 h-full ${step.color} rounded-full transition-all`}
+                      className={`${step.color} h-2 rounded-full transition-all duration-300`}
                       style={{ width: `${step.percentage}%` }}
-                    ></div>
+                    />
                   </div>
+                  <div className="text-xs text-gray-500">{step.description}</div>
                 </div>
               </div>
-              
-              {index < funnelSteps.length - 1 && (
-                <div className="ml-7 mt-2 mb-2 h-6 w-0.5 bg-gray-200"></div>
-              )}
             </div>
           );
         })}
       </div>
       
-      <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-100">
-        <p className="text-sm text-gray-700">
-          <span className="font-semibold text-green-700">Great work!</span> You're converting 63% of your calls into completed jobs.
-        </p>
+      <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div>
+            <p className="text-sm text-gray-600">Overall Conversion</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">
+              {((funnel.completed / funnel.calls) * 100).toFixed(1)}%
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Answer Rate</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{rates.answer_rate.toFixed(1)}%</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Appointment Rate</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{rates.appointment_rate.toFixed(1)}%</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">Completion Rate</p>
+            <p className="text-xl font-semibold text-gray-900 mt-1">{rates.completion_rate.toFixed(1)}%</p>
+          </div>
+        </div>
       </div>
     </div>
   );
-}
+};
+
+export default ConversionFunnel;

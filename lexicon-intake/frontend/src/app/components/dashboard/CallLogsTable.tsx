@@ -1,129 +1,117 @@
-import { Phone, Clock, Eye } from 'lucide-react';
+import React, { useState } from 'react';
+import { Phone, Clock, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Badge } from '@/app/components/ui/badge';
+import { useCalls } from '../../../hooks/useDashboard';
+import { TableSkeleton } from '../../../components/ui/Skeleton';
+import { ErrorDisplay } from '../../../components/ui/ErrorDisplay';
 
-const callLogs = [
-  {
-    id: 1,
-    caller: 'Sarah Mitchell',
-    phone: '(555) 234-5678',
-    outcome: 'Booked',
-    duration: '5:23',
-    preview: 'Needs urgent HVAC repair, system not cooling properly...',
-    time: '2 hours ago',
-  },
-  {
-    id: 2,
-    caller: 'Mike Johnson',
-    phone: '(555) 987-6543',
-    outcome: 'Follow-up',
-    duration: '3:45',
-    preview: 'Asked about pricing for water heater installation...',
-    time: '3 hours ago',
-  },
-  {
-    id: 3,
-    caller: 'Jennifer Lee',
-    phone: '(555) 456-7890',
-    outcome: 'Booked',
-    duration: '6:12',
-    preview: 'Electrical outlet not working in kitchen, safety concern...',
-    time: '5 hours ago',
-  },
-  {
-    id: 4,
-    caller: 'David Brown',
-    phone: '(555) 654-3210',
-    outcome: 'Booked',
-    duration: '4:56',
-    preview: 'Roof leak after recent storm, needs inspection...',
-    time: '6 hours ago',
-  },
-  {
-    id: 5,
-    caller: 'Amanda White',
-    phone: '(555) 789-0123',
-    outcome: 'Booked',
-    duration: '7:34',
-    preview: 'Installing new thermostat, discussed smart home options...',
-    time: '7 hours ago',
-  },
-  {
-    id: 6,
-    caller: 'Robert Garcia',
-    phone: '(555) 111-2222',
-    outcome: 'Follow-up',
-    duration: '2:18',
-    preview: 'General inquiry about maintenance packages...',
-    time: '1 day ago',
-  },
-];
+const CallLogsTable: React.FC = () => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: callsData, isLoading, error, refetch } = useCalls(currentPage);
 
-const outcomeStyles = {
-  Booked: 'bg-green-100 text-green-700 border-green-200',
-  'Follow-up': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-};
+  if (isLoading) {
+    return <TableSkeleton />;
+  }
 
-export function CallLogsTable() {
+  if (error || !callsData?.success) {
+    return (
+      <ErrorDisplay
+        message="Failed to load call logs"
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  const { calls, pagination } = callsData.data;
+  const totalPages = Math.ceil(pagination.total / pagination.limit);
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+  };
+
+  const getOutcomeBadge = (classification: string) => {
+    switch (classification) {
+      case 'QUALIFIED_LEAD':
+        return <Badge variant="default">Booked</Badge>;
+      case 'UNQUALIFIED_LEAD':
+        return <Badge variant="secondary">Follow-up</Badge>;
+      case 'SPAM_INVALID':
+        return <Badge variant="destructive">Spam</Badge>;
+      default:
+        return <Badge variant="outline">Unknown</Badge>;
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
   return (
     <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Recent Call Activity</h3>
-          <p className="text-sm text-gray-500 mt-1">Latest customer interactions and outcomes</p>
+          <h3 className="text-lg font-semibold text-gray-900">Recent Call Logs</h3>
+          <p className="text-sm text-gray-500 mt-1">Latest incoming calls and their outcomes</p>
         </div>
-        <button className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          View All Calls
-        </button>
+        <div className="text-sm text-gray-500">
+          Showing {pagination.offset + 1}-{Math.min(pagination.offset + pagination.limit, pagination.total)} of {pagination.total}
+        </div>
       </div>
       
-      <div className="overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Caller</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Phone</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Service</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Outcome</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Duration</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Call Preview</th>
               <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Time</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Action</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Actions</th>
             </tr>
           </thead>
-          <tbody>
-            {callLogs.map((log) => (
-              <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+          <tbody className="divide-y divide-gray-100">
+            {calls.map((call) => (
+              <tr key={call.id} className="hover:bg-gray-50 transition-colors">
                 <td className="py-4 px-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{log.caller}</p>
-                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                      <Phone className="w-3 h-3" />
-                      {log.phone}
-                    </p>
+                    <div className="font-medium text-gray-900">{call.caller_name}</div>
+                    {call.location && (
+                      <div className="text-sm text-gray-500">{call.location}</div>
+                    )}
                   </div>
                 </td>
                 <td className="py-4 px-4">
-                  <Badge 
-                    variant="outline" 
-                    className={outcomeStyles[log.outcome as keyof typeof outcomeStyles]}
-                  >
-                    {log.outcome}
-                  </Badge>
-                </td>
-                <td className="py-4 px-4">
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    {log.duration}
+                  <div className="flex items-center text-gray-600">
+                    <Phone className="w-4 h-4 mr-2" />
+                    {call.caller_phone}
                   </div>
                 </td>
                 <td className="py-4 px-4">
-                  <p className="text-sm text-gray-600 max-w-xs truncate">{log.preview}</p>
+                  <div className="text-sm text-gray-900">{call.service_requested}</div>
+                  {call.urgency && (
+                    <div className="text-xs text-gray-500 capitalize">{call.urgency}</div>
+                  )}
                 </td>
                 <td className="py-4 px-4">
-                  <p className="text-sm text-gray-500">{log.time}</p>
+                  {getOutcomeBadge(call.classification)}
                 </td>
                 <td className="py-4 px-4">
-                  <button className="flex items-center gap-1 text-sm text-[#1e3a5f] hover:underline">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Clock className="w-4 h-4 mr-1" />
+                    {formatTimeAgo(call.created_at)}
+                  </div>
+                </td>
+                <td className="py-4 px-4">
+                  <button className="text-blue-600 hover:text-blue-800 transition-colors">
                     <Eye className="w-4 h-4" />
-                    View
                   </button>
                 </td>
               </tr>
@@ -131,6 +119,61 @@ export function CallLogsTable() {
           </tbody>
         </table>
       </div>
+      
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-between">
+          <div className="text-sm text-gray-500">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => handlePageChange(pageNum)}
+                  className={`px-3 py-1 border rounded-md transition-colors ${
+                    currentPage === pageNum
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default CallLogsTable;
