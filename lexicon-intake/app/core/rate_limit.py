@@ -1,4 +1,4 @@
-"""Redis-based rate limiting."""
+"""Redis-based rate limiting with atomic Lua script."""
 
 import asyncio
 from typing import Any
@@ -10,12 +10,28 @@ from app.settings import settings
 
 logger = structlog.get_logger()
 
+# Atomic rate limiting Lua script
+RATE_LIMIT_SCRIPT = """
+local key = KEYS[1]
+local limit = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+
+local current = redis.call('INCR', key)
+if current == 1 then
+    redis.call('EXPIRE', key, window)
+end
+
+return current <= limit and 1 or 0
+"""
+
 
 class RateLimiter:
-    """Redis-based rate limiter using sliding window."""
+    """Redis-based rate limiter using atomic Lua script."""
     
     def __init__(self, redis_client: redis.Redis) -> None:
         self.redis = redis_client
+        # Register the Lua script
+        self.rate_limit_script = self.redis.register_script(RATE_LIMIT_SCRIPT)
     
     async def is_allowed(
         self,
@@ -24,7 +40,7 @@ class RateLimiter:
         window: int,
     ) -> bool:
         """
-        Check if request is allowed based on rate limit.
+        Check if request is allowed based on rate limit using atomic Lua script.
         
         Args:
             key: Rate limit key (e.g., IP address)
@@ -34,23 +50,24 @@ class RateLimiter:
         Returns:
             True if allowed, False otherwise
         """
-        current_time = asyncio.get_event_loop().time()
-        window_start = current_time - window
-        
-        # Remove old entries
-        await self.redis.zremrangebyscore(key, 0, window_start)
-        
-        # Count current requests
-        current_requests = await self.redis.zcard(key)
-        
-        if current_requests >= limit:
-            return False
-        
-        # Add current request
-        await self.redis.zadd(key, {str(current_time): current_time})
-        await self.redis.expire(key, window)
-        
-        return True
+        try:
+            # Execute atomic Lua script
+            result = await self.rate_limit_script(
+                keys=[key],
+                args=[str(limit), str(window)]
+            )
+            return result == 1
+        except Exception as e:
+            logger.error(
+                "Rate limit check failed",
+                key=key,
+                limit=limit,
+                window=window,
+                error=str(e),
+                exc_info=True,
+            )
+            # Fail open - allow request if rate limiting fails
+            return True
 
 
 # Global rate limiter instance

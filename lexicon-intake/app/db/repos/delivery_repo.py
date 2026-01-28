@@ -64,63 +64,61 @@ class DeliveryRepository:
         response_status_code: int | None = None,
         last_attempt_at: Any = None,
     ) -> DeliveryRecord | None:
-        """Update delivery record status and metadata."""
+        """Update delivery record with new status and attempt information."""
         query = select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
         result = await self.session.execute(query)
-        delivery = result.scalar_one_or_none()
+        delivery_record = result.scalar_one_or_none()
         
-        if delivery:
-            delivery.status = status
+        if not delivery_record:
+            return None
             
-            if attempt_count is not None:
-                delivery.attempt_count = attempt_count
-            
-            if response_data is not None:
-                delivery.response_data = response_data
-            
-            if error_message is not None:
-                delivery.error_message = error_message
-            
-            if failed_final is not None:
-                delivery.failed_final = failed_final
-            
-            if failure_reason is not None:
-                delivery.failure_reason = failure_reason
-            
-            if response_status_code is not None:
-                delivery.response_status_code = response_status_code
-            
-            if last_attempt_at is not None:
-                delivery.last_attempt_at = last_attempt_at
-            
-            await self.session.flush()
+        if status is not None:
+            delivery_record.status = status
+        if attempt_count is not None:
+            delivery_record.attempt_count = attempt_count
+        else:
+            delivery_record.attempt_count += 1
+        if response_data is not None:
+            delivery_record.response_data = response_data
+        if error_message is not None:
+            delivery_record.error_message = error_message
+        if failed_final is not None:
+            delivery_record.failed_final = failed_final
+        if failure_reason is not None:
+            delivery_record.failure_reason = failure_reason
+        if response_status_code is not None:
+            delivery_record.response_status_code = response_status_code
+        if last_attempt_at is not None:
+            delivery_record.last_attempt_at = last_attempt_at
+        else:
+            delivery_record.last_attempt_at = datetime.utcnow()
         
-        return delivery
+        await self.session.flush()
+        return delivery_record
     
     async def update_delivery_attempt(
         self,
         delivery_id: str,
         status: DeliveryStatus,
-        attempt_count: int | None = None,
-        response_data: dict[str, Any] | None = None,
-        error_message: str | None = None,
-        failed_final: bool | None = None,
-        failure_reason: str | None = None,
         response_status_code: int | None = None,
-        last_attempt_at: Any = None,
-    ) -> DeliveryRecord | None:
-        """Alias for update_delivery_status to maintain compatibility."""
-        return await self.update_delivery_status(
-            delivery_id=delivery_id,
-            status=status,
-            attempt_count=attempt_count,
-            response_data=response_data,
-            error_message=error_message,
-            failed_final=failed_final,
-            failure_reason=failure_reason,
-            response_status_code=response_status_code,
-            last_attempt_at=last_attempt_at,
-        )
+        error_message: str | None = None,
+    ) -> DeliveryRecord:
+        """Update delivery record after attempt."""
+        query = select(DeliveryRecord).where(DeliveryRecord.id == delivery_id)
+        result = await self.session.execute(query)
+        delivery_record = result.scalar_one()
+        
+        delivery_record.status = status
+        delivery_record.attempt_count += 1
+        delivery_record.last_attempt_at = datetime.utcnow()
+        delivery_record.response_status_code = response_status_code
+        delivery_record.error_message = error_message
+        
+        if status == DeliveryStatus.FAILED_FINAL:
+            delivery_record.failed_final = True
+        
+        await self.session.flush()
+        return delivery_record
     
     async def get_failed_final_deliveries(
         self,
@@ -154,6 +152,22 @@ class DeliveryRepository:
                 DeliveryRecord.failed_final == False
             )
         ).order_by(DeliveryRecord.created_at).limit(limit)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+    
+    async def get_stuck_pending_deliveries(
+        self,
+        threshold_time: datetime,
+    ) -> list[DeliveryRecord]:
+        """Get deliveries stuck in PENDING status since threshold time."""
+        query = select(DeliveryRecord).where(
+            and_(
+                DeliveryRecord.status == DeliveryStatus.PENDING,
+                DeliveryRecord.failed_final == False,
+                DeliveryRecord.created_at < threshold_time
+            )
+        ).order_by(DeliveryRecord.created_at)
         
         result = await self.session.execute(query)
         return list(result.scalars().all())

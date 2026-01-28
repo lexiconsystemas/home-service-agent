@@ -10,6 +10,7 @@ from app.adapters.messaging.sendgrid_email import SendGridEmailAdapter
 from app.adapters.webhooks.webhook_sender import WebhookSender
 from app.core.enums import DeliveryChannel, DeliveryPurpose, DeliveryStatus
 from app.core.time import utc_now, format_timestamp
+from app.core.circuit_breaker import with_circuit_breaker, CircuitOpenError
 from app.db.repos.delivery_repo import DeliveryRepository
 from app.db.repos.lead_repo import LeadRepository
 from app.db.repos.client_repo import ClientRepository
@@ -230,6 +231,7 @@ def _extract_stored_routing(lead_record, client_config) -> dict:
         }
 
 
+@with_circuit_breaker("webhook")
 async def _deliver_webhook(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver webhook payload."""
     webhook_sender = WebhookSender()
@@ -243,10 +245,14 @@ async def _deliver_webhook(delivery_record, lead_record, routing_config: dict) -
         # Use existing webhook sender logic with the correct URL
         success = await webhook_sender.send_webhook(str(delivery_record.id), webhook_url)
         return success, None, 200 if success else None
+    except CircuitOpenError:
+        logger.warning("Webhook circuit breaker is open", delivery_id=str(delivery_record.id))
+        return False, "Webhook service temporarily unavailable", 503
     finally:
         await webhook_sender.close()
 
 
+@with_circuit_breaker("twilio")
 async def _deliver_sms(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver SMS message."""
     sms_adapter = TwilioSMSAdapter()
@@ -258,10 +264,14 @@ async def _deliver_sms(delivery_record, lead_record, routing_config: dict) -> tu
             message=message,
         )
         return success, error_message, status_code
+    except CircuitOpenError:
+        logger.warning("Twilio circuit breaker is open", delivery_id=str(delivery_record.id))
+        return False, "SMS service temporarily unavailable", 503
     finally:
         await sms_adapter.close()
 
 
+@with_circuit_breaker("sendgrid")
 async def _deliver_email(delivery_record, lead_record, routing_config: dict) -> tuple[bool, str | None, int | None]:
     """Deliver email message."""
     email_adapter = SendGridEmailAdapter()
@@ -274,6 +284,9 @@ async def _deliver_email(delivery_record, lead_record, routing_config: dict) -> 
             body=body,
         )
         return success, error_message, status_code
+    except CircuitOpenError:
+        logger.warning("SendGrid circuit breaker is open", delivery_id=str(delivery_record.id))
+        return False, "Email service temporarily unavailable", 503
     finally:
         await email_adapter.close()
 
