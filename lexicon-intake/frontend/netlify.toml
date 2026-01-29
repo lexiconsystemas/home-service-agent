@@ -11,7 +11,7 @@
   status = 200
 
 [context.production.environment]
-  VITE_API_URL = "https://lexicon-intake-production.up.railway.app"
+  VITE_API_URL = "https://home-service-agent-production.up.railway.app"
 
 [context.deploy-preview.environment]
-  VITE_API_URL = "https://lexicon-intake-production.up.railway.app"
+  VITE_API_URL = "https://home-service-agent-production.up.railway.app"
