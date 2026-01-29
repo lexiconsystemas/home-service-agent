@@ -562,7 +562,7 @@ async def get_client_config(
     }
 
 
-@router.post("/v1/admin/clients")
+@router.post("/clients")
 async def create_client(
     client_data: CreateClientRequest,
     request: Request,
