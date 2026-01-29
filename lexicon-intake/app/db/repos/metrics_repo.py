@@ -309,8 +309,8 @@ class MetricsRepository:
                 "caller_phone": call.caller_phone,
                 "caller_name": call.caller_name,
                 "service_requested": call.service_requested,
-                "urgency": call.urgency.value if call.urgency else None,
-                "classification": call.classification.value if call.classification else None,
+                "urgency": call.urgency,  # Now a string from PostgreSQL ENUM
+                "classification": call.classification,  # Now a string from PostgreSQL ENUM
                 "created_at": call.created_at.isoformat(),
                 "budget": call.budget,
                 "location_zip": call.location_zip,
