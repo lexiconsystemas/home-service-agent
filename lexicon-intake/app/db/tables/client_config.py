@@ -96,7 +96,6 @@ class ClientConfig(Base):
     )
     
     version: Mapped[int] = mapped_column(
-        String(20),
         nullable=False,
         default=1,
         comment="Configuration version for rollback support",
