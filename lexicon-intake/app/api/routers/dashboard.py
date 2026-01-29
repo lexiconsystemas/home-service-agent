@@ -70,7 +70,7 @@ async def get_dashboard_metrics(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to retrieve metrics",
+            detail=f"Failed to retrieve metrics: {type(e).__name__}: {str(e)}",
         )
 
 
