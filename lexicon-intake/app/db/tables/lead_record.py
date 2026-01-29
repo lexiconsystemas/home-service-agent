@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, String, Text, func
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy import JSON, Enum, String, Text, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID, ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import (
@@ -14,6 +14,10 @@ from app.core.enums import (
     TimeWindow,
 )
 from app.db.base import Base
+
+# Create PostgreSQL ENUM types that match the migration definitions
+urgency_enum = ENUM('LOW', 'MEDIUM', 'HIGH', 'SAME_DAY', name='urgencylevel', create_type=False)
+classification_enum = ENUM('QUALIFIED', 'UNQUALIFIED', 'SPAM', 'DROPPED', name='callclassification', create_type=False)
 
 
 class LeadRecord(Base):
@@ -82,13 +86,13 @@ class LeadRecord(Base):
         nullable=True,
     )
     
-    urgency: Mapped[UrgencyLevel] = mapped_column(
-        String(20),
+    urgency: Mapped[str] = mapped_column(
+        urgency_enum,
         nullable=False,
     )
-    
-    classification: Mapped[CallClassification] = mapped_column(
-        String(30),
+
+    classification: Mapped[str] = mapped_column(
+        classification_enum,
         nullable=False,
     )
     
