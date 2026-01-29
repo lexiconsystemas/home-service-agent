@@ -1,5 +1,6 @@
 """Client configuration table."""
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -15,10 +16,10 @@ class ClientConfig(Base):
 
     __tablename__ = "client_configs"
 
-    id: Mapped[UUID] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         primary_key=True,
-        server_default=func.gen_random_uuid(),
+        default=uuid.uuid4,
     )
 
     client_id: Mapped[str] = mapped_column(
