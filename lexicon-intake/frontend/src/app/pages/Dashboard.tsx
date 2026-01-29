@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Sidebar } from '../components/dashboard/Sidebar';
-import { Header } from '../components/dashboard/Header';
-import { OverviewCards } from '../components/dashboard/OverviewCards';
-import { CallPerformanceChart } from '../components/dashboard/CallPerformanceChart';
-import { RevenueInsights } from '../components/dashboard/RevenueInsights';
-import { ConversionFunnel } from '../components/dashboard/ConversionFunnel';
-import { CallLogsTable } from '../components/dashboard/CallLogsTable';
-import { AISummaryPanel } from '../components/dashboard/AISummaryPanel';
+import Header from '../components/dashboard/Header';
+import OverviewCards from '../components/dashboard/OverviewCards';
+import CallPerformanceChart from '../components/dashboard/CallPerformanceChart';
+import RevenueInsights from '../components/dashboard/RevenueInsights';
+import ConversionFunnel from '../components/dashboard/ConversionFunnel';
+import CallLogsTable from '../components/dashboard/CallLogsTable';
+import AISummaryPanel from '../components/dashboard/AISummaryPanel';
 
 const Dashboard: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
