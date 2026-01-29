@@ -4,12 +4,12 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  VITE_API_URL = "https://home-service-agent-production.up.railway.app"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
 [context.production.environment]
   VITE_API_URL = "https://home-service-agent-production.up.railway.app"
 
