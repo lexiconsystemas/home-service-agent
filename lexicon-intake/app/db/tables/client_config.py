@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import JSON, String, Text, func
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -53,9 +53,9 @@ class ClientConfig(Base):
     )
     
     delivery_channels: Mapped[list[str]] = mapped_column(
-        JSON,
+        ARRAY(String),
         nullable=False,
-        default=list,
+        server_default="ARRAY['WEBHOOK']::varchar[]",
     )
     
     webhook_url: Mapped[str | None] = mapped_column(
@@ -63,16 +63,14 @@ class ClientConfig(Base):
         nullable=True,
     )
     
-    sms_to_numbers: Mapped[list[str]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=list,
+    sms_to_numbers: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
     )
     
-    email_to_addresses: Mapped[list[str]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=list,
+    email_to_addresses: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
     )
     
     message_templates: Mapped[dict[str, Any]] = mapped_column(
