@@ -50,7 +50,7 @@ class MetricsRepository:
         booked_jobs_query = select(func.count(LeadRecord.id)).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == CallClassification.QUALIFIED,
+                LeadRecord.classification == CallClassification.QUALIFIED.value,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
@@ -148,7 +148,7 @@ class MetricsRepository:
         ).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == CallClassification.QUALIFIED,
+                LeadRecord.classification == CallClassification.QUALIFIED.value,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
                 LeadRecord.service_requested.isnot(None),
@@ -225,7 +225,7 @@ class MetricsRepository:
         appointments_query = select(func.count(LeadRecord.id)).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == CallClassification.QUALIFIED,
+                LeadRecord.classification == CallClassification.QUALIFIED.value,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
@@ -239,8 +239,8 @@ class MetricsRepository:
         ).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == CallClassification.QUALIFIED,
-                DeliveryRecord.status == DeliveryStatus.SENT,
+                LeadRecord.classification == CallClassification.QUALIFIED.value,
+                DeliveryRecord.status == DeliveryStatus.SENT.value,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
