@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError } from 'axios';
 
 // Create axios instance with baseURL from environment
 const apiClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_URL || 'https://home-service-agent-production.up.railway.app',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
