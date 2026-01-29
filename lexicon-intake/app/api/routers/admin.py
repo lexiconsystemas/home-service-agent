@@ -591,11 +591,14 @@ async def create_client(
                 detail=f"Phone number {client_data.to_number} already in use",
             )
 
+        import uuid
+
         # Generate API key for the client
         client_api_key = f"lexicon_client_{client_data.client_id}_{secrets.token_urlsafe(32)}"
 
-        # Create client configuration
+        # Create client configuration with explicit UUID
         client_config = ClientConfig(
+            id=uuid.uuid4(),
             client_id=client_data.client_id,
             to_number=client_data.to_number,
             greeting_message=client_data.greeting_message,
