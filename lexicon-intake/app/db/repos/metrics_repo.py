@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, func, and_, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.enums import CallClassification, DeliveryStatus
 from app.db.tables.lead_record import LeadRecord
 from app.db.tables.delivery_record import DeliveryRecord
 from app.db.tables.audit_log import AuditLog
@@ -49,7 +50,7 @@ class MetricsRepository:
         booked_jobs_query = select(func.count(LeadRecord.id)).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == "QUALIFIED_LEAD",
+                LeadRecord.classification == CallClassification.QUALIFIED,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
@@ -147,7 +148,7 @@ class MetricsRepository:
         ).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == "QUALIFIED_LEAD",
+                LeadRecord.classification == CallClassification.QUALIFIED,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
                 LeadRecord.service_requested.isnot(None),
@@ -224,7 +225,7 @@ class MetricsRepository:
         appointments_query = select(func.count(LeadRecord.id)).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == "QUALIFIED_LEAD",
+                LeadRecord.classification == CallClassification.QUALIFIED,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
@@ -238,8 +239,8 @@ class MetricsRepository:
         ).where(
             and_(
                 LeadRecord.client_id == client_id,
-                LeadRecord.classification == "QUALIFIED_LEAD",
-                DeliveryRecord.status == "SENT",
+                LeadRecord.classification == CallClassification.QUALIFIED,
+                DeliveryRecord.status == DeliveryStatus.SENT,
                 LeadRecord.created_at >= start_date,
                 LeadRecord.created_at <= end_date,
             )
@@ -312,7 +313,7 @@ class MetricsRepository:
                 "classification": call.classification.value if call.classification else None,
                 "created_at": call.created_at.isoformat(),
                 "budget": call.budget,
-                "location": call.location,
+                "location_zip": call.location_zip,
             })
         
         return {
