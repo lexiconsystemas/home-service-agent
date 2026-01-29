@@ -109,7 +109,26 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     Global exception handler for unexpected errors.
     """
     request_id = getattr(request.state, "request_id", "unknown")
-    
+
+    # If it's an HTTPException, preserve the original detail message
+    if isinstance(exc, HTTPException):
+        logger.warning(
+            "HTTP exception occurred",
+            request_id=request_id,
+            status_code=exc.status_code,
+            detail=exc.detail,
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": "HTTP_ERROR",
+                    "message": exc.detail,
+                    "request_id": request_id,
+                }
+            },
+        )
+
     logger.error(
         "Unexpected error occurred",
         request_id=request_id,
@@ -117,13 +136,13 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         error_message=str(exc),
         exc_info=True,
     )
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": {
                 "code": "INTERNAL_ERROR",
-                "message": "An internal error occurred",
+                "message": f"{type(exc).__name__}: {str(exc)}",
                 "request_id": request_id,
             }
         },
