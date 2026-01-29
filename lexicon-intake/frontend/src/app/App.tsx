@@ -39,44 +39,44 @@ const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
+      <Router>
+        <AuthProvider>
           <Routes>
             {/* Root route - redirect based on auth status */}
-            <Route 
-              path="/" 
+            <Route
+              path="/"
               element={
                 <RequireAuth>
                   <Navigate to="/dashboard" replace />
                 </RequireAuth>
-              } 
+              }
             />
-            
+
             {/* Login route */}
             <Route path="/login" element={<Login />} />
-            
+
             {/* Protected dashboard route */}
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Dashboard />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Catch all - redirect to dashboard */}
-            <Route 
-              path="*" 
+            <Route
+              path="*"
               element={
                 <RequireAuth>
                   <Navigate to="/dashboard" replace />
                 </RequireAuth>
-              } 
+              }
             />
           </Routes>
-        </Router>
-      </AuthProvider>
+        </AuthProvider>
+      </Router>
     </QueryClientProvider>
   );
 }
