@@ -606,6 +606,11 @@ async def create_client(
         followup_flags={},
         sms_to_numbers=[],
         email_to_addresses=[],
+        # Legacy boolean columns from migration 001
+        followup_enabled=False,
+        followup_confirmation_enabled=False,
+        followup_reminder_enabled=False,
+        followup_escalation_enabled=False,
     )
 
     session.add(client_config)
