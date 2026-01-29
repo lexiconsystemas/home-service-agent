@@ -62,7 +62,5 @@ class ConfigSnapshot(Base):
         comment="Reason for the configuration change",
     )
     
-    # Indexes for common queries
-    __table_args__ = (
-        {"schema": "lexicon_intake"},
-    )
+    # Table arguments (no schema - use public)
+    __table_args__: tuple = ()

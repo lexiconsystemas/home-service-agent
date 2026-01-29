@@ -115,7 +115,5 @@ class ClientConfig(Base):
         server_default=func.now(),
     )
     
-    # Indexes for common queries
-    __table_args__ = (
-        {"schema": "lexicon_intake"},
-    )
+    # Table arguments (no schema - use public)
+    __table_args__: tuple = ()

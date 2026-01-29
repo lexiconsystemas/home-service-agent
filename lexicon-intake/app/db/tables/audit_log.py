@@ -75,7 +75,5 @@ class AuditLog(Base):
         comment="Additional context or metadata",
     )
     
-    # Indexes for common queries
-    __table_args__ = (
-        {"schema": "lexicon_intake"},
-    )
+    # Table arguments (no schema - use public)
+    __table_args__: tuple = ()
