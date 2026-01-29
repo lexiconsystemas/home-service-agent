@@ -1,6 +1,7 @@
 """Admin endpoints for client configuration management."""
 
 import re
+import secrets
 from datetime import datetime
 from typing import Any
 
@@ -79,16 +80,41 @@ class MessageTemplatesUpdate(BaseModel):
 
 class RoutingConfigUpdate(BaseModel):
     """Model for updating routing configuration."""
-    
+
     timezone: str
     business_hours: dict[str, Any]
     profiles: list[dict[str, Any]]
-    
+
     @validator("profiles")
     def validate_profiles(cls, v):
         """Validate routing profiles."""
         if not v:
             raise ValueError("At least one routing profile is required")
+        return v
+
+
+class CreateClientRequest(BaseModel):
+    """Model for creating a new client."""
+
+    client_id: str
+    to_number: str
+    business_name: str
+    greeting_message: str = "Thank you for calling. How can we help you today?"
+    delivery_channels: list[str] = ["WEBHOOK"]
+    webhook_url: str | None = None
+
+    @validator("client_id")
+    def validate_client_id(cls, v):
+        """Validate client ID format."""
+        if not v or len(v) < 3:
+            raise ValueError("client_id must be at least 3 characters")
+        return v
+
+    @validator("to_number")
+    def validate_to_number(cls, v):
+        """Validate phone number format."""
+        if not re.match(r"^\+\d{10,15}$", v):
+            raise ValueError("to_number must be E.164 format (+country_number)")
         return v
 
 
@@ -533,4 +559,68 @@ async def get_client_config(
         "client_api_key": client_config.client_api_key,
         "version": client_config.version,
         "updated_at": client_config.updated_at.isoformat() if client_config.updated_at else None,
+    }
+
+
+@router.post("/v1/admin/clients")
+async def create_client(
+    client_data: CreateClientRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    api_key: str = Depends(verify_admin_api_key),
+) -> dict[str, Any]:
+    """Create a new client with API key."""
+    from app.db.tables.client_config import ClientConfig
+
+    client_repo = ClientRepository(session)
+
+    # Check if client_id already exists
+    existing = await client_repo.get_by_client_id(client_data.client_id)
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Client {client_data.client_id} already exists",
+        )
+
+    # Check if to_number already exists
+    existing_number = await client_repo.get_by_to_number(client_data.to_number)
+    if existing_number:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Phone number {client_data.to_number} already in use",
+        )
+
+    # Generate API key for the client
+    client_api_key = f"lexicon_client_{client_data.client_id}_{secrets.token_urlsafe(32)}"
+
+    # Create client configuration
+    client_config = ClientConfig(
+        client_id=client_data.client_id,
+        to_number=client_data.to_number,
+        greeting_message=client_data.greeting_message,
+        rules_json={"business_name": client_data.business_name},
+        delivery_channels=client_data.delivery_channels,
+        webhook_url=client_data.webhook_url,
+        client_api_key=client_api_key,
+        message_templates={},
+        followup_flags={},
+        sms_to_numbers=[],
+        email_to_addresses=[],
+    )
+
+    session.add(client_config)
+    await session.commit()
+
+    logger.info(
+        "Client created",
+        client_id=client_data.client_id,
+        to_number=client_data.to_number,
+    )
+
+    return {
+        "success": True,
+        "client_id": client_data.client_id,
+        "to_number": client_data.to_number,
+        "client_api_key": client_api_key,
+        "message": "Client created successfully. Save the client_api_key - it won't be shown again.",
     }
