@@ -32,11 +32,16 @@ class AuthService:
     @staticmethod
     def extract_client_id_from_api_key(api_key: str) -> str | None:
         """Extract client ID from API key format."""
+        # API key format: lexicon_client_{client_id}_{random_token}
+        # The random token is 43 chars from token_urlsafe(32)
         if api_key.startswith("lexicon_client_"):
-            # API key format: lexicon_client_{client_id}_{random}
-            parts = api_key.split("_")
-            if len(parts) >= 4:
-                return parts[2]
+            # Remove the prefix
+            remainder = api_key[len("lexicon_client_"):]
+            # The last underscore separates client_id from the random token
+            # The random token is 43 characters (base64 encoded 32 bytes)
+            last_underscore = remainder.rfind("_")
+            if last_underscore > 0:
+                return remainder[:last_underscore]
         return None
     
     @staticmethod
