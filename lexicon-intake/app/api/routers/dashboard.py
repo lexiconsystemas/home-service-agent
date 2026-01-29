@@ -226,7 +226,7 @@ async def get_recent_calls(
         )
         raise HTTPException(
             status_code=500,
-            detail="Failed to retrieve call logs",
+            detail=f"Failed to retrieve call logs: {type(e).__name__}: {str(e)}",
         )
 
 
