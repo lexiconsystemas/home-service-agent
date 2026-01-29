@@ -35,7 +35,22 @@ app = FastAPI(
 app.add_exception_handler(LexiconError, lexicon_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
-# CORS middleware - disabled by default for security
+# Add CORS middleware for dashboard frontend (always enabled for dashboard access)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://*.vercel.app",
+        "https://*.netlify.app",
+        "https://home-service-agent.netlify.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Additional CORS middleware for other origins if enabled
 if settings.cors_enabled:
     app.add_middleware(
         CORSMiddleware,
@@ -44,20 +59,6 @@ if settings.cors_enabled:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-# Add CORS middleware for dashboard frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://*.vercel.app",
-        "https://*.netlify.app",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.middleware("http")
