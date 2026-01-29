@@ -1,5 +1,8 @@
 """Health check endpoints."""
 
+import os
+import re
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +16,36 @@ router = APIRouter()
 async def health_check() -> dict[str, str]:
     """Basic health check."""
     return {"status": "healthy"}
+
+
+@router.get("/debug")
+async def debug_info() -> dict:
+    """Debug information - no database dependency."""
+    from app.settings import settings
+
+    # Show masked database URL for debugging
+    db_url = settings.database_url
+    if db_url:
+        # Mask password in URL
+        masked_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", db_url)
+    else:
+        masked_url = "NOT SET"
+
+    # Also check raw env vars
+    raw_database_url = os.environ.get("DATABASE_URL", "NOT SET")
+    if raw_database_url != "NOT SET":
+        raw_masked = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", raw_database_url)
+    else:
+        raw_masked = raw_database_url
+
+    return {
+        "database_url_masked": masked_url,
+        "raw_database_url_masked": raw_masked,
+        "admin_api_key_set": settings.admin_api_key != "change-in-production",
+        "redis_url_masked": re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", settings.redis_url)
+        if "@" in settings.redis_url
+        else settings.redis_url,
+    }
 
 
 @router.get("/ready")
